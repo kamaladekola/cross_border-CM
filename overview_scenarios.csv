@@ -1,0 +1,3 @@
+scen_number;ParameterA;Sens_analysis;remarks
+1;1;NO;ParameterA is a dummy - you could use this to control e.g. the flexibility incentive in this run
+2;2;YES;ParameterA is a dummy - you could use this to control e.g. the flexibility incentive in this run

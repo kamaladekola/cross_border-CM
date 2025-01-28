@@ -1,0 +1,55 @@
+General: 
+  nTimesteps: 24 # number of timesteps 
+  totConsumers: 1000000 # 1 million consumers
+
+ADMM:
+ rho_EOM: 1 # rho ADMM penalty term, EOM 
+ max_iter: 1000 # maximum number of iterations
+ epsilon: 0.1 # stopping criterion - tolerance on "accuracy" with which the coupling constraints are satisfied. Applied to dual and primal residuals.
+ CircularBufferSize: 10 # number of iterations for which data will be retained, should be at least 2 and less than max_iter
+
+EOM: 
+  parameter_A: 1 # dummy, not used 
+
+Consumers: # Set of representative consumers
+  TypeA:
+   Share: 0.25 # Share of consumers in overall consumer mix
+   PV_cap: 0.003 # MWp 
+   D: "CONS_LOW" # Demand timeseries that needs to be picked up
+   PV_AF: "SOLAR_SOUTH" # AF solar timeseries that needs to be picked up
+
+  TypeB: 
+   Share: 0.5  # Share of consumers in overall consumer mix
+   PV_cap: 0.005 # MWp 
+   D: "CONS_HIGH" # Timeseries that needs to be picked up
+   PV_AF: "SOLAR_WEST" # AF solar timeseries that needs to be picked up
+
+  TypeC: 
+   Share: 0.25  # Share of consumers in overall consumer mix
+   PV_cap: 0.01 # MWp 
+   D: "CONS_HIGH" # Timeseries that needs to be picked up
+   PV_AF: "SOLAR_WEST" # AF solar timeseries that needs to be picked up
+
+Generators: 
+  # OPEX are parametrized as a/2 x g^2 + b x g 
+  Baseload:
+    a: 0.008 # (€/MWh)^2
+    b: 0 # €/MWh
+    C: 5000 # MW
+
+  MidMerit:
+    a: 0.032 # (€/MWh)^2
+    b: 40 # €/MWh
+    C: 5000 # MW
+
+  Peak:
+    a: 0.08 # (€/MWh)^2
+    b: 200 # €/MWh
+    C: 5000 # MW
+
+  WindOnshore:
+    a: 0 # (€/MWh)^2
+    b: 0 # €/MWh
+    C: 5000 # MW
+    AF: "WIND_ONSHORE"
+

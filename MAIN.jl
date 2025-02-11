@@ -48,23 +48,31 @@ GRBsetparam(GUROBI_ENV, "Threads", "4")
 println("        ")
 
 # Include functions
+include(joinpath(home_dir,"Source","utility_functions.jl"))
 include(joinpath(home_dir,"Source","define_common_parameters.jl"))
 include(joinpath(home_dir,"Source","define_EOM_parameters.jl"))
 include(joinpath(home_dir,"Source","define_consumer_parameters.jl"))
 include(joinpath(home_dir,"Source","define_generator_parameters.jl"))
+include(joinpath(home_dir,"Source","define_interconnector_parameters.jl")) # added interconnector parameters
 include(joinpath(home_dir,"Source","build_consumer_agent.jl"))
 include(joinpath(home_dir,"Source","build_generator_agent.jl"))
+include(joinpath(home_dir,"Source","build_interconnector_agent.jl")) # added interconnector agent
 include(joinpath(home_dir,"Source","define_results.jl"))
 include(joinpath(home_dir,"Source","ADMM.jl"))
 include(joinpath(home_dir,"Source","ADMM_subroutine.jl"))
 include(joinpath(home_dir,"Source","solve_consumer_agent.jl"))
 include(joinpath(home_dir,"Source","solve_generator_agent.jl"))
+include(joinpath(home_dir,"Source","solve_interconnector_agent.jl")) # added interconnector agent
 include(joinpath(home_dir,"Source","update_rho.jl"))
 include(joinpath(home_dir,"Source","save_results.jl"))
 
 # Data common to all scenarios data 
 data = YAML.load_file(joinpath(home_dir,"Input","config.yaml"))
-ts = CSV.read(joinpath(home_dir,"Input","timeseries.csv"),delim=";",DataFrame)
+ts = CSV.read(joinpath(home_dir,"Input","timeseries.csv"),delim=";",DataFrame) # to be removed
+load = CSV.read(joinpath(home_dir,"Input","load.csv"),delim=";",DataFrame) # columns are zones
+pv = CSV.read(joinpath(home_dir,"Input","pv.csv"),delim=";",DataFrame)
+wind_offshore = CSV.read(joinpath(home_dir,"Input","wind_offshore.csv"),delim=";",DataFrame)
+wind_onshore = CSV.read(joinpath(home_dir,"Input","wind_onshore.csv"),delim=";",DataFrame)
 
 # Overview scenarios
 scenario_overview = CSV.read(joinpath(home_dir,"overview_scenarios.csv"),DataFrame,delim=";")
@@ -141,33 +149,79 @@ println("    ")
 println("Including all required input data: done")
 println("   ")
 
-## 2. Initiate models for representative agents 
-agents = Dict()
-agents[:Gen] = [id for id in keys(data["Generators"])] 
-agents[:Cons] = [id for id in keys(data["Consumers"])]
-agents[:all] = union(agents[:Gen],agents[:Cons]) # all agents in the game  
-agents[:eom] = union(agents[:Gen],agents[:Cons]) # agents participating in the EOM                           
-mdict = Dict(i => Model(optimizer_with_attributes(() -> Gurobi.Optimizer(GUROBI_ENV))) for i in agents[:all])
+## 2. Initiate models for representative agents
+
+zones = string.(collect(keys(data["Consumers"])))
+println("Existing zones:" , zones)
+println("   ")
+
+agents = Dict{Symbol, Any}()
+
+agents[:Gen] = String[]
+agents[:Cons] = String[]
+agents[:IC] = String[]
+
+agents[:Gen] = ["Gen_$(z)_$(tech)" for z in zones for tech in keys(data["Generators"][z])] # generator agents for each zone and technology
+agents[:Cons] = ["Cons_$(z)" for z in zones] # consumer agents for each zone
+agents[:IC] = ["IC_$(z1)_$(z2)" for z1 in zones for z2 in zones if z1 < z2] # interconnectors
+
+
+agents[:all] = union(agents[:Gen],agents[:Cons], agents[:IC]) # all agents in the game  
+agents[:eom] = union(agents[:Gen],agents[:Cons], agents[:IC]) # agents participating in the EOM                           
+
+# grouping agents by zone
+agents[:Gen_Z] = Dict(z => [m for m in agents[:Gen] if parse_agent_name(m)[1] == z] for z in zones)
+agents[:Cons_Z] = Dict(z => [m for m in agents[:Cons] if parse_agent_name(m)[1] == z] for z in zones)
+agents[:IC_Z] = Dict(z => [m for m in agents[:IC] if parse_agent_name(m)[1] == z] for z in zones)
+agents[:IC_Z] = Dict(z => [ m for m in agents[:IC] if (let (z1, z2) = parse_agent_name(m); z1 == z || z2 == z; end)] for z in zones)
+
+agents[:zones] = Dict(z => union(agents[:Gen_Z][z], agents[:Cons_Z][z], agents[:IC_Z][z]) for z in zones)
+
+# create one model per agent
+mdict = Dict{String, Model}(i => Model(optimizer_with_attributes(() -> Gurobi.Optimizer(GUROBI_ENV))) for i in agents[:all])
+
+# consumer models
+for m in agents[:Cons]
+    zone, _ = parse_agent_name(m)
+    cons_data = merge(data["General"], data["Consumers"][zone])
+
+    define_common_parameters!(m, mdict[m], data, ts, agents, scenario_overview_row) # Parameters common to all agents
+    define_consumer_parameters!(mdict[m], cons_data, load)                            # Consumers
+end
+
+# Generator models
+for m in agents[:Gen]
+    zone, tech = parse_agent_name(m)
+    gen_data = merge(data["General"], data["Generators"][zone][tech])
+
+    define_common_parameters!(m, mdict[m], data, ts, agents, scenario_overview_row) # Parameters common to all agents
+    define_generator_parameters!(mdict[m], gen_data, ts)                            # Generators
+end
+
+# Interconnector models
+for m in agents[:IC]
+    z1, z2 = parse_agent_name(m)
+    ic_key = "$(z1)_$(z2)"
+    IC_data = merge(data["General"], data["InterconnectionCapacity"][ic_key])
+    define_common_parameters!(m, mdict[m], data, ts, agents, scenario_overview_row) # Parameters common to all agents
+    define_interconnector_parameters!(mdict[m], IC_data, ts)                 # Interconnectors
+end
+
 
 ## 3. Define parameters for markets and representative agents
 # Parameters/variables EOM
 EOM = Dict()
-define_EOM_parameters!(EOM,data,ts,scenario_overview_row)
-# Market 2
-
-# consumer models
-for m in agents[:Cons]
-    define_common_parameters!(m,mdict[m],data,ts,agents,scenario_overview_row)                                  # Parameters common to all agents
-    define_consumer_parameters!(mdict[m],merge(data["General"],data["Consumers"][m]),ts)                        # Consumers
-end
-# Generator models
-for m in agents[:Gen]
-    define_common_parameters!(m,mdict[m],data,ts,agents,scenario_overview_row)                                  # Parameters common to all agents
-    define_generator_parameters!(mdict[m],merge(data["General"],data["Generators"][m]),ts)                      # Generators
-end
+define_EOM_parameters!(EOM,data,load,scenario_overview_row,zones)
 
 # Calculate number of agents in each market
 EOM["nAgents"] = length(agents[:eom])
+EOM["nAgents_z"] = length(agents[:zones][zones[1]])
+
+# println("Number of agents per zone: ", EOM["nAgents_z"])
+# Parameters/variables CM
+# CM = Dict()
+# define_CM_parameters!(CM,data,ts,scenario_overview_row)
+
 
 println("Inititate model, sets and parameters: done")
 println("   ")
@@ -178,6 +232,9 @@ for m in agents[:Cons]
 end
 for m in agents[:Gen]
     build_generator_agent!(mdict[m])
+end
+for m in agents[:IC]
+    build_interconnector_agent!(mdict[m])
 end
 
 println("Build model: done")
@@ -192,24 +249,31 @@ println("   ")
 results = Dict()
 ADMM = Dict()
 TO = TimerOutput()
-define_results!(merge(data["General"],data["ADMM"]),results,ADMM,agents)           # initialize structure of results, only those that will be stored in each iteration
-ADMM!(results,ADMM,EOM,mdict,agents,scenario_overview_row,data,TO)                 # calculate equilibrium 
+define_results!(merge(data["General"],data["ADMM"]),results,ADMM,agents,zones)           # initialize structure of results, only those that will be stored in each iteration
+ADMM!(results,ADMM,EOM,mdict,agents,scenario_overview_row,data,TO,zones)                 # calculate equilibrium 
 ADMM["walltime"] =  TimerOutputs.tottime(TO)*10^-9/60                              # wall time 
 
 println(string("Done!"))
 println(string("        "))
 println(string("Required iterations: ",ADMM["n_iter"]))
 println(string("        "))
-println(string("RP EOM: ",  ADMM["Residuals"]["Primal"]["EOM"][end], " -- Tolerance: ",ADMM["Tolerance"]["EOM"]))
-println(string("RD EOM: ",  ADMM["Residuals"]["Dual"]["EOM"][end], " -- Tolerance: ",ADMM["Tolerance"]["EOM"]))
+
+# per zone?
+# println(string("RP EOM: ",  ADMM["Residuals"]["Primal"]["EOM"][end], " -- Tolerance: ",ADMM["Tolerance"]["EOM"]))
+# println(string("RD EOM: ",  ADMM["Residuals"]["Dual"]["EOM"][end], " -- Tolerance: ",ADMM["Tolerance"]["EOM"]))
+for zone in zones
+    println(string("RP EOM for zone ", zone, ": ", ADMM["Residuals"]["Primal"]["EOM"][zone][end], " -- Tolerance: ", ADMM["Tolerance"]["EOM"]))
+    println(string("RD EOM for zone ", zone, ": ", ADMM["Residuals"]["Dual"]["EOM"][zone][end], " -- Tolerance: ", ADMM["Tolerance"]["EOM"]))
+end
+
 println(string("        "))
 
 ## 6. Postprocessing and save results 
 if sens_number >= 2
-save_results(mdict,EOM,ADMM,results,data,agents,scenario_overview_row,sensitivity_overview[sens_number-1,:remarks]) 
+save_results(mdict,EOM,ADMM,results,data,agents,scenario_overview_row,sensitivity_overview[sens_number-1,:remarks], zones) 
 # @save joinpath(home_dir,"Results",string("Scenario_",scenario_overview_row["scen_number"],"_",sensitivity_overview[sens_number-1,:remarks]))
 else
-save_results(mdict,EOM,ADMM,results,data,agents,scenario_overview_row,"ref") 
+save_results(mdict,EOM,ADMM,results,data,agents,scenario_overview_row,"ref", zones) 
 # @save joinpath(home_dir,"Results",string("Scenario_",scenario_overview_row["scen_number"],"_ref"))
 end
 
@@ -220,3 +284,4 @@ println("   ")
 # end # end for loop over scenarios
 
 println(string("##############################################################################################"))
+

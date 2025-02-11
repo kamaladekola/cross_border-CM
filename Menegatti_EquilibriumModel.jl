@@ -243,7 +243,7 @@ renewable_availability = Dict(
 @variable(model, 0 <= d_local,    basename="d_c^(CM,c)")
 @variable(model, 0 <= d_foreign,  basename="d_c^(CM,c')")
 ###############################################################################
-# OBJECTIVE (faithfully matching eqn. in screenshot)
+# OBJECTIVE
 #
 #   max  (Λ_MAX^(CM,c)  -  λ_c^(CM))   * d_c^(CM,c)
 #      + (Λ_MAX^(CM,c') -  λ_c'^(CM,c)) * d_c^(CM,c')

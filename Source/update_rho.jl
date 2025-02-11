@@ -1,10 +1,13 @@
 function update_rho!(ADMM::Dict, iter::Int64)
-    if mod(iter,1) == 0
-        # ρ-updates following Boyd et al. (2011)
-        if ADMM["Residuals"]["Primal"]["EOM"][end] > 2*ADMM["Residuals"]["Dual"]["EOM"][end]
-            push!(ADMM["ρ"]["EOM"], minimum([1000,1.1*ADMM["ρ"]["EOM"][end]]))
-        elseif ADMM["Residuals"]["Dual"]["EOM"][end] > 2*ADMM["Residuals"]["Primal"]["EOM"][end]
-            push!(ADMM["ρ"]["EOM"], 1/1.1*ADMM["ρ"]["EOM"][end])
+    # Update ρ for each zone
+    if mod(iter, 1) == 0
+        for zone in keys(ADMM["Residuals"]["Primal"]["EOM"])
+            # ρ-updates following Boyd et al. (2011)
+            if last(ADMM["Residuals"]["Primal"]["EOM"][zone]) > 2 * last(ADMM["Residuals"]["Dual"]["EOM"][zone])
+                push!(ADMM["ρ"]["EOM"][zone], 1.1 * last(ADMM["ρ"]["EOM"][zone]))
+            elseif last(ADMM["Residuals"]["Dual"]["EOM"][zone]) > 2 * last(ADMM["Residuals"]["Primal"]["EOM"][zone])
+                push!(ADMM["ρ"]["EOM"][zone], 1/1.1 * last(ADMM["ρ"]["EOM"][zone]))
+            end
         end
     end
 end

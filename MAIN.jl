@@ -166,16 +166,18 @@ agents[:Cons] = ["Cons_$(z)" for z in zones] # consumer agents for each zone
 agents[:IC] = ["IC_$(z1)_$(z2)" for z1 in zones for z2 in zones if z1 < z2] # interconnectors
 
 
-agents[:all] = union(agents[:Gen],agents[:Cons], agents[:IC]) # all agents in the game  
-agents[:eom] = union(agents[:Gen],agents[:Cons], agents[:IC]) # agents participating in the EOM                           
+agents[:all] = union(agents[:Gen],agents[:Cons], agents[:IC])                                         # all agents in the game  
+agents[:eom] = union(agents[:Gen],agents[:Cons], agents[:IC])                                         # agents participating in the EOM                           
+agents[:cm] = union(agents[:Gen], agents[:Cons])                                                                     # agents participating in the CM -> may add agents[:Cons] if demand response participates in the CM
 
 # grouping agents by zone
 agents[:Gen_Z] = Dict(z => [m for m in agents[:Gen] if parse_agent_name(m)[1] == z] for z in zones)
 agents[:Cons_Z] = Dict(z => [m for m in agents[:Cons] if parse_agent_name(m)[1] == z] for z in zones)
-agents[:IC_Z] = Dict(z => [m for m in agents[:IC] if parse_agent_name(m)[1] == z] for z in zones)
 agents[:IC_Z] = Dict(z => [ m for m in agents[:IC] if (let (z1, z2) = parse_agent_name(m); z1 == z || z2 == z; end)] for z in zones)
 
-agents[:zones] = Dict(z => union(agents[:Gen_Z][z], agents[:Cons_Z][z], agents[:IC_Z][z]) for z in zones)
+agents[:zones] = Dict(z => union(agents[:Gen_Z][z], agents[:Cons_Z][z], agents[:IC_Z][z]) for z in zones)       # agents in zone Z
+agents[:eom_Z] = Dict(z => union(agents[:Gen_Z][z], agents[:Cons_Z][z], agents[:IC_Z][z]) for z in zones)       # agents participating in zone Z participating in the EOM
+agents[:cm_Z] = Dict(z => union(agents[:Gen_Z][z], agents[:Cons_Z][z]) for z in zones)                                              # agents participating in zone Z participating in the CM -> may add agents[:Cons_Z] if demand response participates in the CM
 
 # create one model per agent
 mdict = Dict{String, Model}(i => Model(optimizer_with_attributes(() -> Gurobi.Optimizer(GUROBI_ENV))) for i in agents[:all])
@@ -211,16 +213,19 @@ end
 ## 3. Define parameters for markets and representative agents
 # Parameters/variables EOM
 EOM = Dict()
-define_EOM_parameters!(EOM,data,load,scenario_overview_row,zones)
+# define_EOM_parameters!(EOM,data,load,scenario_overview_row,zones)
+
+# Parameters/variables CM
+CM = Dict()
 
 # Calculate number of agents in each market
 EOM["nAgents"] = length(agents[:eom])
 EOM["nAgents_z"] = length(agents[:zones][zones[1]])
-
+CM["nAgents"] = length(agents[:cm])
+CM["nAgents_z"] = length(agents[:zones][zones[1]])
 # println("Number of agents per zone: ", EOM["nAgents_z"])
-# Parameters/variables CM
-# CM = Dict()
-# define_CM_parameters!(CM,data,ts,scenario_overview_row)
+
+
 
 
 println("Inititate model, sets and parameters: done")
@@ -250,7 +255,7 @@ results = Dict()
 ADMM = Dict()
 TO = TimerOutput()
 define_results!(merge(data["General"],data["ADMM"]),results,ADMM,agents,zones)           # initialize structure of results, only those that will be stored in each iteration
-ADMM!(results,ADMM,EOM,mdict,agents,scenario_overview_row,data,TO,zones)                 # calculate equilibrium 
+ADMM!(results,ADMM,EOM,CM,mdict,agents,scenario_overview_row,data,TO,zones)                 # calculate equilibrium 
 ADMM["walltime"] =  TimerOutputs.tottime(TO)*10^-9/60                              # wall time 
 
 println(string("Done!"))

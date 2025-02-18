@@ -1,26 +1,31 @@
 General: 
-  nTimesteps: 24 # number of timesteps 
-  # totConsumers: 1000000 # 1 million consumers
+  nTimesteps: 24 # number of timesteps
+  nReprDays: 1 # days
+  nDays: 365 # days
+  nYears: 1 # years
 
 ADMM:
- rho_EOM: 1 # rho ADMM penalty term, EOM 
- max_iter: 10000 # maximum number of iterations -> Requires more than 1000 iterations for convergence
- epsilon: 0.1 # stopping criterion - tolerance on "accuracy" with which the coupling constraints are satisfied. Applied to dual and primal residuals.
- CircularBufferSize: 10 # number of iterations for which data will be retained, should be at least 2 and less than max_iter
+  rho_EOM: 1 # rho ADMM penalty term, EOM
+  rho_CM: 1 # rho ADMM penalty term, CM
+  max_iter: 5000 # maximum number of iterations -> Requires more than 1000 iterations for convergence
+  epsilon: 0.1 # stopping criterion - tolerance on "accuracy" with which the coupling constraints are satisfied. Applied to dual and primal residuals.
+  CircularBufferSize: 3 # number of iterations for which data will be retained, should be at least 2 and less than max_iter
 
 EOM: 
   parameter_A: 1 # dummy, not used 
 
-Consumers: # Set of representative consumers (instead, define consumers by zones)
+Consumers: # consumers by zones
   A:
-   WTP: 3000.0 # Value of lost load (€/MWh) # change the name to WTP
-   D: "A" # Demand timeseries that needs to be picked up
-   ela: 0.2 # fraction of demand that is elastic
+    WTP: 3000.0 # Value of lost load (€/MWh) # change the name to WTP
+    D: "A" # Demand timeseries that needs to be picked up
+    ela: 0.2 # fraction of demand that is elastic
+    sigmaCM: 1
 
   B:
-   WTP: 3000.0 # Value of lost load (€/MWh)
-   D: "B" # Timeseries that needs to be picked up
-   ela: 0.2 # fraction of demand that is elastic
+    WTP: 3000.0 # Value of lost load (€/MWh)
+    D: "B" # Timeseries that needs to be picked up
+    ela: 0.2 # fraction of demand that is elastic
+    sigmaCM: 1
 
 Generators: 
   # OPEX are parametrized as a/2 x g^2 + b x g
@@ -28,23 +33,26 @@ Generators:
     Baseload:
       a: 0.008 # (€/MWh)^2
       b: 0 # €/MWh
-      C: 4000 # MW - existing capacity (set to zero if greenfield)
-      I: 180 # k€/MW-year - annualized investment cost (convert to €/MW-year?)
+      C: 0 # MW - existing capacity (set to zero if greenfield)
+      I: 180000 # €/MW-year - annualized investment cost (convert to €/MW-year?)
       max_cap: 10000 # MW - maximum capacity
+      sigmaCM: 1
 
     MidMerit:
       a: 0.032 # (€/MWh)^2
       b: 40 # €/MWh
-      C: 4000 # MW - existing capacity (set to zero if greenfield)
-      I: 100 # k€/MW-year - annualized investment cost
+      C: 0 # MW - existing capacity (set to zero if greenfield)
+      I: 100000 # €/MW-year - annualized investment cost
       max_cap: 10000 # MW - maximum capacity
+      sigmaCM: 1
 
     Peak:
       a: 0.08 # (€/MWh)^2
-      b: 200 # €/MWh
-      C: 2000 # MW - existing capacity (set to zero if greenfield)
-      I: 70 # k€/MW-year - annualized investment cost
+      b: 300 # €/MWh
+      C: 0 # MW - existing capacity (set to zero if greenfield)
+      I: 70000 # €/MW-year - annualized investment cost
       max_cap: 10000 # MW - maximum capacity
+      sigmaCM: 1
 
     # WindOnshore:
     #   a: 0 # (€/MWh)^2
@@ -70,50 +78,42 @@ Generators:
     Baseload:
       a: 0.008 # (€/MWh)^2
       b: 2 # €/MWh
-      C: 10000 # MW - existing capacity (set to zero if greenfield)
-      I: 180 # k€/MW-year - annualized investment cost (convert to €/MW-year?)
+      C: 0 # MW - existing capacity (set to zero if greenfield)
+      I: 180000 # €/MW-year - annualized investment cost (convert to €/MW-year?)
       max_cap: 10000 # MW - maximum capacity
+      sigmaCM: 1
 
     MidMerit:
       a: 0.032 # (€/MWh)^2
       b: 40 # €/MWh
-      C: 3000 # MW - existing capacity (set to zero if greenfield)
-      I: 100 # k€/MW-year - annualized investment cost
+      C: 0 # MW - existing capacity (set to zero if greenfield)
+      I: 100000 # €/MW-year - annualized investment cost
       max_cap: 10000 # MW - maximum capacity
+      sigmaCM: 1
 
     Peak:
       a: 0.08 # (€/MWh)^2
-      b: 200 # €/MWh
-      C: 1000 # MW - existing capacity (set to zero if greenfield)
-      I: 70 # k€/MW-year - annualized investment cost
+      b: 300 # €/MWh
+      C: 0 # MW - existing capacity (set to zero if greenfield)
+      I: 70000 # €/MW-year - annualized investment cost
       max_cap: 10000 # MW - maximum capacity
+      sigmaCM: 1
 
 
-CapacityMarket:
-  local:
-    A: 0.0 # €/MW-year (local capacity market price in zone A)
-    B: 0.0 # €/MW-year (local capacity market price in zone B)
-  foreign:
-    A: 0.0 # €/MW-year (foreign capacity market price for zone A)
-    B: 0.0 # €/MW-year (foreign capacity market price for zone B)
-  demand:
-    A: 5000.0 # MW (local capacity demand in zone A)
-    B: 5000.0 # MW (local capacity demand in zone B)
-  foreign_demand:
-    A: 3000.0 # MW (foreign capacity demand for zone A)
-    B: 3000.0 # MW (foreign capacity demand for zone B)
-  max_capacity_price: 
-    A: 100000.0 # €/MW-year (maximum capacity market price)
-    B: 100000.0 # €/MW-year (maximum capacity market price)
-  capacity_margin:
-    A: 0.10 # (10% capacity margin)
-    B: 0.10
+CM:
+  A:
+    capacity_target: 10000.0   # MW (capacity target for zone A)
+    price_target: 100000.0    # €/MW-year (price target for zone A)
+    capacity_margin: 0.10     # 10% capacity margin
+  B:
+    capacity_target: 10000.0
+    price_target: 100000.0
+    capacity_margin: 0.10
 
 InterconnectionCapacity:
-  A_B:
-    f_cap: 3000
-    r_cap: 2500
+  A_B:                        # interconnection between zone A and B (MW) - bidirectional
+    f_cap: 1500               # forward capacity (MW)
+    r_cap: 1000               # reverse capacity (MW)
 
 
 
-# extend to include offshore bidding zone ?

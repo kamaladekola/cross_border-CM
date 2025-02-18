@@ -25,11 +25,6 @@ function build_interconnector_agent!(mod::Model)
     return mod
 end
 
-
-# as defined in Menegatti et al.
-
-# enforce one direction at a time, or allow net flows?
-
 # extend to include flow based market coupling constraints?
 
 

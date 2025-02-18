@@ -30,3 +30,8 @@ function sign_for_zone(IC_m::String, z::String)
         return 0
     end
 end
+
+function get_agent_name(m::String)
+    agent_name = split(m, "_")
+    return agent_name[end]
+end

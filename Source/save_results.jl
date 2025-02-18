@@ -23,18 +23,29 @@ function save_results(mdict::Dict, EOM::Dict, ADMM::Dict, results::Dict, data::D
 
     for z in zones
         zone_df = DataFrame(Timestep = timesteps)
-        zone_df[!, "Price"]  = results["λ"]["EOM"][z][end]
-
+        zone_df[!, "EOM_price"]  = results["λ"]["EOM"][z][end]
+        zone_df[!, "CM_price"]  = fill(results["λ"]["CM"][z][end], nT)
         for m in agents[:eom]
-            if is_interconnector(m)
+            if m in agents[:IC]                                        # interconnector results
                 z1, z2 = parse_agent_name(m) 
                 if z == z1 || z == z2
-                    zone_df[!, "G_$(m)"] = sign_for_zone(m, z) * results["g"][m][end]
+                    zone_df[!, "$(m)"] = sign_for_zone(m, z) * results["g"][m][end]
                 end
-            else
+            elseif m in agents[:Gen]                                                           # generator results
                 zone_m, _ = parse_agent_name(m)
                 if zone_m == z
-                    zone_df[!, "G_$(m)"] = results["g"][m][end]
+                    zone_df[!, "$(m)"] = results["g"][m][end]
+                    zone_df[!, "Capacity_$(m)"] = fill(results["y"][m][end], nT)
+                    gen_name = get_agent_name(m)
+                    zone_df[!, "new_capacity_$(m)"] = fill(results["y"][m][end] - data["Generators"][zone_m][gen_name]["C"], nT)
+                end
+            elseif m in agents[:Cons]
+                cons_zone, _ = parse_agent_name(m)
+                if cons_zone == z
+                    zone_df[!, "$(m)"] = results["g"][m][end]
+                    zone_df[!, "Inelastic_$(m)"] = results["Cons"]["inelastic_demand"][m][end] .* -1
+                    zone_df[!, "Elastic_$(m)"] = results["Cons"]["elastic_demand"][m][end] .* -1
+                    zone_df[!, "ENS_$(m)"] = results["Cons"]["ENS"][m][end]
                 end
             end
         end

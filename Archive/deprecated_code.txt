@@ -1,0 +1,297 @@
+push!(ADMM["Imbalances"]["EOM"][z],
+    sum(is_interconnector(m) 
+            ? sign_for_zone(m, z) * results["g"][m][end] 
+            : results["g"][m][end] 
+        for m in agents[:eom_Z][z])
+)
+
+
+push!(ADMM["Imbalances"]["EOM"][z], sum(is_interconnector(m) ? sign_for_zone(m, z) * results["g"][m][end] : results["g"][m][end] for m in agents[:eom_Z][z]))
+
+# # parse agent names
+# function parse_agent_name(agent_name::String)
+#     parts = split(agent_name, "_")
+#     if length(parts) == 3 && parts[1] == "Gen"
+#         return (parts[2], parts[3])  # (zone, tech)
+#     elseif length(parts) == 2 && parts[1] == "Cons"
+#         return (parts[2], nothing)  # (zone, nothing)
+#     elseif length(parts) == 3 && parts[1] == "IC"
+#         return (parts[2], parts[3]) # (z1, z2)
+#     else
+#         error("Agent name format not recognized: $agent_name")
+#     end
+# end
+
+
+# check if agent is an interconnector
+function is_interconnector(agent_name::String)::Bool
+    parts = split(agent_name, "_")
+    return length(parts) == 3 && parts[1] == "IC"
+end
+
+# get the sign of the interconnector flow 
+function sign_for_zone(IC_m::String, z::String)
+    z1, z2 = parse_agent_name(IC_m)  # "IC_A_B" => ("A","B")
+    # -1 for export, +1 for import, 0 for no flow --> still some confusion with signs and convergence
+    if z == z1
+        return -1
+    elseif z == z2
+        return +1
+    else
+        return 0
+    end
+end
+
+function ADMM!(results::Dict, ADMM::Dict, EOM::Dict, CM::Dict, mdict::Dict, agents::Dict, 
+               scenario_overview_row::DataFrameRow, data::Dict, TO::TimerOutput, zones::Vector{String})
+    convergence = 0
+    iterations = ProgressBar(1:data["ADMM"]["max_iter"])
+
+    for iter in iterations
+        if convergence == 0
+            # Multi-threaded version: spawn subproblems for all agents
+            @sync for m in agents[:all] 
+                @spawn ADMM_subroutine!(m, results, ADMM, EOM, CM, mdict[m], agents, TO)
+            end
+
+            # Compute global imbalance for interconnectors (global constraint)
+            @timeit TO "Compute global imbalance" begin
+                push!(ADMM["Flow"], sum(results["g"][m][end] for m in agents[:IC]))
+            end
+
+            # Compute zonal imbalances for EOM and CM
+            @timeit TO "Compute zonal imbalances" begin
+                for z in zones
+                    push!(ADMM["Imbalances"]["EOM"][z], sum(results["g"][m][end] for m in agents[:eom_Z][z]))
+                    push!(ADMM["Imbalances"]["CM"][z], sum(results["cap_cm"][m][end] for m in agents[:cm_Z][z]))
+                end                                
+            end
+
+            # Compute primal residuals (zone-specific for EOM/CM, global for IC)
+            @timeit TO "Compute primal residuals" begin
+                for z in zones
+                    push!(ADMM["Residuals"]["Primal"]["EOM"][z], sqrt(sum(ADMM["Imbalances"]["EOM"][z][end].^2)))
+                    push!(ADMM["Residuals"]["Primal"]["CM"][z], sqrt(sum(ADMM["Imbalances"]["CM"][z][end].^2)))
+                end
+                push!(ADMM["Residuals"]["Primal"]["IC"], sqrt(sum(ADMM["Flow"][end].^2)))
+            end
+
+            @timeit TO "Compute dual residuals" begin
+                if iter > 1
+                    for z in zones
+                        push!(ADMM["Residuals"]["Dual"]["EOM"][z], sqrt(sum(sum((ADMM["ρ"]["EOM"][z][end] * ((results["g"][m][end] - sum(results["g"][mstar][end] for mstar in agents[:eom_Z][z])/(EOM["nAgents_z"]+1)) - (results["g"][m][end-1] - sum(results["g"][mstar][end-1] for mstar in agents[:eom_Z][z])/(EOM["nAgents_z"]+1)))).^2 for m in agents[:eom_Z][z]))))
+                        push!(ADMM["Residuals"]["Dual"]["CM"][z], sqrt(sum(sum((ADMM["ρ"]["CM"][z][end] * ((results["cap_cm"][m][end] - sum(results["cap_cm"][mstar][end] for mstar in agents[:cm_Z][z])/(CM["nAgents_z"]+1)) - (results["cap_cm"][m][end-1] - sum(results["cap_cm"][mstar][end-1] for mstar in agents[:cm_Z][z])/(CM["nAgents_z"]+1)))).^2 for m in agents[:cm_Z][z]))))
+                    end
+                    
+                    push!(ADMM["Residuals"]["Dual"]["IC"], sqrt(ADMM["ρ"]["IC"][end] * sum((ADMM["Flow"][end] - ADMM["Flow"][end-1]).^2)))
+                end
+            end
+
+            # Update prices:
+            @timeit TO "Update prices" begin
+                for z in zones
+                    push!(results["λ"]["EOM"][z], results["λ"]["EOM"][z][end] - ADMM["ρ"]["EOM"][z][end]/100 * ADMM["Imbalances"]["EOM"][z][end])
+                    push!(results["λ"]["CM"][z], results["λ"]["CM"][z][end] - ADMM["ρ"]["CM"][z][end] * ADMM["Imbalances"]["CM"][z][end])
+                end
+                push!(results["λ"]["IC"], results["λ"]["IC"][end] - ADMM["ρ"]["IC"][end] * ADMM["Flow"][end])
+            end
+
+            # Update ρ-values (for EOM and CM; IC ρ remains global)
+            @timeit TO "Update ρ" begin
+                update_rho!(ADMM, iter)
+            end
+
+            # Update progress bar
+            @timeit TO "Progress bar" begin
+                max_primal = maximum([ADMM["Residuals"]["Primal"]["EOM"][z][end] for z in zones])
+                max_dual   = maximum([ADMM["Residuals"]["Dual"]["EOM"][z][end] for z in zones])
+                set_description(iterations, @sprintf("Max Primal: %.3f, Max Dual: %.3f", max_primal, max_dual))
+            end
+
+            # Check convergence: all residuals must be below their respective tolerances
+            if all(ADMM["Residuals"]["Primal"]["EOM"][z][end] <= ADMM["Tolerance"]["EOM"] for z in zones) &&
+               all(ADMM["Residuals"]["Dual"]["EOM"][z][end] <= ADMM["Tolerance"]["EOM"] for z in zones) &&
+               all(ADMM["Residuals"]["Primal"]["CM"][z][end] <= ADMM["Tolerance"]["EOM"] for z in zones) &&
+               all(ADMM["Residuals"]["Dual"]["CM"][z][end] <= ADMM["Tolerance"]["EOM"] for z in zones) &&
+               (ADMM["Residuals"]["Primal"]["IC"][end] <= ADMM["Tolerance"]["EOM"]) &&
+               (ADMM["Residuals"]["Dual"]["IC"][end] <= ADMM["Tolerance"]["EOM"])
+                convergence = 1
+            end
+
+            # Store number of iterations
+            ADMM["n_iter"] = copy(iter)
+        end
+    end
+end
+
+function ADMM_subroutine!(m::String, results::Dict, ADMM::Dict, EOM::Dict, CM::Dict, mod::Model, agents::Dict, TO::TimerOutput)
+    TO_local = TimerOutput()
+    zone, _ = parse_agent_name(m)
+
+    # Calculate penalty terms ADMM and update price to most recent value 
+    @timeit TO_local "Compute ADMM penalty terms" begin
+        if m in agents[:IC]
+            # update the consensus variable for interconnectors
+            # create a matrix of zones by timestep
+            mod.ext[:parameters][:g_bar_IC] = results["g"][m][end] - (1/EOM["nZones"]+1) * last(ADMM["Flow"])
+            mod.ext[:parameters][:λ_IC] = last(results["λ"]["IC"])
+            mod.ext[:parameters][:ρ_IC] = last(ADMM["ρ"]["IC"])
+        else
+            # update consumer/generator agents
+            mod.ext[:parameters][:g_bar] = results["g"][m][end] - 1/(EOM["nAgents_z"]+1) * last(ADMM["Imbalances"]["EOM"][zone])
+            mod.ext[:parameters][:λ_EOM] = last(results["λ"]["EOM"][zone])
+            mod.ext[:parameters][:ρ_EOM] = last(ADMM["ρ"]["EOM"][zone])
+        end
+    end
+
+    if m in agents[:cm]
+        @timeit TO_local "Compute CM penalty terms" begin
+            mod.ext[:parameters][:cap_bar] = results["cap_cm"][m][end] - 1/(CM["nAgents_z"]+1) * last(ADMM["Imbalances"]["CM"][zone])
+            mod.ext[:parameters][:λ_CM] = last(results["λ"]["CM"][zone])
+            mod.ext[:parameters][:ρ_CM] = last(ADMM["ρ"]["CM"][zone])
+        end
+    end
+
+    # Solve agents' decision problems:
+    if m in agents[:Gen]
+        @timeit TO_local "Solve generator problems" begin
+            solve_generator_agent!(mod)
+        end
+    elseif m in agents[:Cons]
+        @timeit TO_local "Solve consumer problems" begin
+            solve_consumer_agent!(mod)
+        end
+    elseif m in agents[:IC]
+        z, _ = parse_agent_name(m)
+        mod.ext[:parameters][:λ_z] = last(results["λ"]["EOM"][z])
+        @timeit TO_local "Solve interconnector problems" begin
+            solve_interconnector_agent!(mod)
+        end
+    end
+
+    # Query results
+    @timeit TO_local "Query results" begin
+        push!(results["g"][m], collect(value.(mod.ext[:variables][:g])))  # generation
+
+        if m in agents[:Gen]
+            push!(results["y"][m], value(mod.ext[:variables][:y]))  # installed capacity
+        end
+
+        if m in agents[:cm]
+            push!(results["cap_cm"][m], value.(mod.ext[:variables][:cap_cm]))  # capacity offered in capacity markets
+        end
+
+        if m in agents[:Cons]
+            push!(results["Cons"]["inelastic_demand"][m], collect(value.(mod.ext[:variables][:g_VOLL])))  # inelastic demand
+            push!(results["Cons"]["elastic_demand"][m], collect(value.(mod.ext[:variables][:g_ela])))     # elastic demand
+            push!(results["Cons"]["ENS"][m], collect(value.(mod.ext[:variables][:ens])))                  # unserved energy
+        end
+    end
+
+    # Merge local timer output with the global timer output
+    merge!(TO, TO_local)
+end
+
+function define_results!(data::Dict, results::Dict, ADMM::Dict, agents::Dict, zones::Vector)
+    # Store generation results per agent
+    results["g"] = Dict()
+    for m in agents[:eom]
+        results["g"][m] = CircularBuffer{Vector{Float64}}(data["CircularBufferSize"])
+        push!(results["g"][m], zeros(data["nTimesteps"]))
+    end
+
+    # Store installed capacity results for generators
+    results["y"] = Dict()
+    for m in agents[:Gen]
+        results["y"][m] = CircularBuffer{Float64}(data["CircularBufferSize"])
+        push!(results["y"][m], 0.0)
+    end
+
+    # Store consumer results
+    results["Cons"] = Dict()
+    results["Cons"]["inelastic_demand"] = Dict()
+    results["Cons"]["elastic_demand"] = Dict()
+    results["Cons"]["ENS"] = Dict()
+    for m in agents[:Cons]
+       results["Cons"]["inelastic_demand"][m] = CircularBuffer{Vector{Float64}}(data["CircularBufferSize"])
+       results["Cons"]["elastic_demand"][m] = CircularBuffer{Vector{Float64}}(data["CircularBufferSize"])
+       results["Cons"]["ENS"][m] = CircularBuffer{Vector{Float64}}(data["CircularBufferSize"])
+       push!(results["Cons"]["inelastic_demand"][m], zeros(data["nTimesteps"]))
+       push!(results["Cons"]["elastic_demand"][m], zeros(data["nTimesteps"]))
+       push!(results["Cons"]["ENS"][m], zeros(data["nTimesteps"]))
+    end
+
+    # Store capacity offered by agents in the capacity market
+    results["cap_cm"] = Dict()
+    for m in agents[:cm]
+        results["cap_cm"][m] = CircularBuffer{Float64}(data["CircularBufferSize"])
+        push!(results["cap_cm"][m], 0.0)
+    end
+
+    # Prices for each zone in the EOM market
+    results["λ"] = Dict()
+    results["λ"]["EOM"] = Dict(z => CircularBuffer{Vector{Float64}}(data["CircularBufferSize"]) for z in zones)
+    results["λ"]["CM"] = Dict(z => CircularBuffer{Float64}(data["CircularBufferSize"]) for z in zones)
+    results["λ"]["IC"] = CircularBuffer{Vector{Float64}}(data["CircularBufferSize"])
+    for z in zones
+        push!(results["λ"]["EOM"][z], zeros(data["nTimesteps"]))
+        push!(results["λ"]["CM"][z], 0.0)
+        push!(results["λ"]["IC"], zeros(data["nTimesteps"]))
+    end
+
+    # Global interconnector imbalance
+    ADMM["Flow"] = CircularBuffer{Vector{Float64}}(data["CircularBufferSize"])
+    push!(ADMM["Flow"], zeros(data["nTimesteps"]))
+
+    # Imbalances per zone
+    ADMM["Imbalances"] = Dict()
+    ADMM["Imbalances"]["EOM"] = Dict(z => CircularBuffer{Vector{Float64}}(data["CircularBufferSize"]) for z in zones)
+    ADMM["Imbalances"]["CM"] = Dict(z => CircularBuffer{Float64}(data["CircularBufferSize"]) for z in zones)
+    for z in zones
+        push!(ADMM["Imbalances"]["EOM"][z], zeros(data["nTimesteps"]))
+        push!(ADMM["Imbalances"]["CM"][z], 0.0)
+    end
+
+    # Residuals per zone (Primal and Dual)
+    ADMM["Residuals"] = Dict(
+        "Primal" => Dict(
+            "EOM" => Dict(z => CircularBuffer{Float64}(data["CircularBufferSize"]) for z in zones),
+            "CM" => Dict(z => CircularBuffer{Float64}(data["CircularBufferSize"]) for z in zones),
+            "IC"  => CircularBuffer{Float64}(data["CircularBufferSize"])
+        ),
+        "Dual" => Dict(
+            "EOM" => Dict(z => CircularBuffer{Float64}(data["CircularBufferSize"]) for z in zones),
+            "CM" => Dict(z => CircularBuffer{Float64}(data["CircularBufferSize"]) for z in zones),
+            "IC"  => CircularBuffer{Float64}(data["CircularBufferSize"])
+        )
+    )
+    for z in zones
+        push!(ADMM["Residuals"]["Primal"]["EOM"][z], 0.0)
+        push!(ADMM["Residuals"]["Dual"]["EOM"][z], 0.0)
+        push!(ADMM["Residuals"]["Primal"]["CM"][z], 0.0)
+        push!(ADMM["Residuals"]["Dual"]["CM"][z], 0.0)
+    end
+    push!(ADMM["Residuals"]["Primal"]["IC"], 0.0)
+    push!(ADMM["Residuals"]["Dual"]["IC"], 0.0)
+    
+    # Tolerance for EOM (assumed same for all zones)
+    ADMM["Tolerance"] = Dict()
+    ADMM["Tolerance"]["EOM"] = data["epsilon"]
+    ADMM["Tolerance"]["CM"] = data["epsilon"]
+
+    # Initialize per-zone ρ (rho) values
+    ADMM["ρ"] = Dict()
+    ADMM["ρ"]["EOM"] = Dict(z => CircularBuffer{Float64}(data["CircularBufferSize"]) for z in zones)
+    ADMM["ρ"]["CM"] = Dict(z => CircularBuffer{Float64}(data["CircularBufferSize"]) for z in zones)
+    ADMM["ρ"]["IC"]  = CircularBuffer{Float64}(data["CircularBufferSize"])
+    for z in zones
+        push!(ADMM["ρ"]["EOM"][z], data["rho_EOM"])
+        push!(ADMM["ρ"]["CM"][z], data["rho_CM"])
+        push!(ADMM["ρ"]["IC"], data["rho_IC"])
+    end
+
+    ADMM["n_iter"] = 1 
+    ADMM["walltime"] = 0
+    
+    return results, ADMM
+end

@@ -1,22 +1,26 @@
 function solve_interconnector_agent!(mod::Model)
     # Extract sets
     JH = mod.ext[:sets][:JH]
+    JZ = mod.ext[:sets][:JZ]
 
-    # Extract parameters
-    λ1 = mod.ext[:parameters][:λ1]
-    λ2 = mod.ext[:parameters][:λ2]
 
-    g_bar = mod.ext[:parameters][:g_bar] # element in ADMM penalty term related to EOM
-    ρ_EOM = mod.ext[:parameters][:ρ_EOM] # rho-value in ADMM related to EOM auctions
 
-    # Create variables
+    λ_all = mod.ext[:parameters][:λ_all]  # λ_EOM[t,z]
+
+    # ADMM consensus variables and penalty
+    g_bar_all = mod.ext[:parameters][:g_bar_all]  # ḡ[t,z]
+    ρ_all = mod.ext[:parameters][:ρ_all]
+    # net position: positive => import
+
     g = mod.ext[:variables][:g]
 
     # Objective
-    mod.ext[:objective] = @objective(mod, Min,
-    - sum((λ2[jh] - λ1[jh]) * g[jh] for jh in JH)
-    + sum(ρ_EOM/2 * (g[jh] - g_bar[jh])^2 for jh in JH)
-)
+    mod.ext[:objective] = @objective(mod, Min, 
+    -sum(λ_all[jh,jz] * g[jh,jz] for jh in JH, jz in JZ)
+    + sum((ρ_all[jz]/2) * (g[jh,jz] - g_bar_all[jh,jz])^2 
+    for jh in JH, jz in JZ))
+
+
 
     optimize!(mod);
 

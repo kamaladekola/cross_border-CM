@@ -7,51 +7,52 @@ General:
 ADMM:
   rho_EOM: 1 # rho ADMM penalty term, EOM
   rho_CM: 1 # rho ADMM penalty term, CM
-  max_iter: 5000 # maximum number of iterations -> Requires more than 1000 iterations for convergence
+  max_iter: 5000
   epsilon: 0.1 # stopping criterion - tolerance on "accuracy" with which the coupling constraints are satisfied. Applied to dual and primal residuals.
-  CircularBufferSize: 3 # number of iterations for which data will be retained, should be at least 2 and less than max_iter
+  CircularBufferSize: 5 # number of iterations for which data will be retained, should be at least 2 and less than max_iter
 
 EOM: 
   parameter_A: 1 # dummy, not used 
+
 
 Consumers: # consumers by zones
   A:
     WTP: 3000.0 # Value of lost load (€/MWh) # change the name to WTP
     D: "A" # Demand timeseries that needs to be picked up
     ela: 0.2 # fraction of demand that is elastic
-    sigmaCM: 1
+    sigmaCM: 0
 
   B:
     WTP: 3000.0 # Value of lost load (€/MWh)
     D: "B" # Timeseries that needs to be picked up
     ela: 0.2 # fraction of demand that is elastic
-    sigmaCM: 1
+    sigmaCM: 0
 
 Generators: 
   # OPEX are parametrized as a/2 x g^2 + b x g
   A: 
     Baseload:
       a: 0.008 # (€/MWh)^2
-      b: 0 # €/MWh
+      b: 2 # €/MWh
       C: 0 # MW - existing capacity (set to zero if greenfield)
-      I: 180000 # €/MW-year - annualized investment cost (convert to €/MW-year?)
-      max_cap: 10000 # MW - maximum capacity
+      I: 800 # €/MW-day - annualized investment cost (convert to €/MW-year?)
+      max_cap: 20000 # MW - maximum capacity
       sigmaCM: 1
 
     MidMerit:
       a: 0.032 # (€/MWh)^2
-      b: 40 # €/MWh
+      b: 48 # €/MWh
       C: 0 # MW - existing capacity (set to zero if greenfield)
-      I: 100000 # €/MW-year - annualized investment cost
-      max_cap: 10000 # MW - maximum capacity
+      I: 300 # €/MW-day - annualized investment cost
+      max_cap: 20000 # MW - maximum capacity
       sigmaCM: 1
 
     Peak:
       a: 0.08 # (€/MWh)^2
-      b: 300 # €/MWh
+      b: 100 # €/MWh
       C: 0 # MW - existing capacity (set to zero if greenfield)
-      I: 70000 # €/MW-year - annualized investment cost
-      max_cap: 10000 # MW - maximum capacity
+      I: 100 # €/MW-day - annualized investment cost
+      max_cap: 20000 # MW - maximum capacity
       sigmaCM: 1
 
     # WindOnshore:
@@ -77,43 +78,40 @@ Generators:
   B: 
     Baseload:
       a: 0.008 # (€/MWh)^2
-      b: 2 # €/MWh
+      b: 4 # €/MWh
       C: 0 # MW - existing capacity (set to zero if greenfield)
-      I: 180000 # €/MW-year - annualized investment cost (convert to €/MW-year?)
-      max_cap: 10000 # MW - maximum capacity
+      I: 800 # €/MW-day - annualized investment cost (convert to €/MW-year?)
+      max_cap: 20000 # MW - maximum capacity
       sigmaCM: 1
 
     MidMerit:
       a: 0.032 # (€/MWh)^2
-      b: 40 # €/MWh
+      b: 50 # €/MWh
       C: 0 # MW - existing capacity (set to zero if greenfield)
-      I: 100000 # €/MW-year - annualized investment cost
-      max_cap: 10000 # MW - maximum capacity
+      I: 300 # €/MW-day - annualized investment cost
+      max_cap: 20000 # MW - maximum capacity
       sigmaCM: 1
 
     Peak:
       a: 0.08 # (€/MWh)^2
-      b: 300 # €/MWh
+      b: 102 # €/MWh
       C: 0 # MW - existing capacity (set to zero if greenfield)
-      I: 70000 # €/MW-year - annualized investment cost
-      max_cap: 10000 # MW - maximum capacity
+      I: 100 # €/MW-day - annualized investment cost
+      max_cap: 20000 # MW - maximum capacity
       sigmaCM: 1
 
 
 CM:
   A:
-    capacity_target: 10000.0   # MW (capacity target for zone A)
-    price_target: 100000.0    # €/MW-year (price target for zone A)
+    capacity_target: 30000.0   # MW (capacity demand for zone A)
+    price_target: 200.0    # €/MW-day (price target for zone A)
     capacity_margin: 0.10     # 10% capacity margin
   B:
-    capacity_target: 10000.0
-    price_target: 100000.0
+    capacity_target: 30000.0
+    price_target: 200.0
     capacity_margin: 0.10
 
-InterconnectionCapacity:
-  A_B:                        # interconnection between zone A and B (MW) - bidirectional
-    f_cap: 1500               # forward capacity (MW)
-    r_cap: 1000               # reverse capacity (MW)
-
-
+Network:
+  data: "ptdf"  # PTDF dataframe
+  nLines: 1 # 12
 

@@ -31,7 +31,7 @@ function build_generator_agent!(mod::Model)
 
     # Objective => minimize GenCo costs
     mod.ext[:objective] = @objective(mod, Min,
-        + sum(A/2*g[jh]^2 for jh in JH)                       # cost function for generation
+        # + sum(A/2*g[jh]^2 for jh in JH)                       # cost function for generation
         + sum(B*g[jh] for jh in JH)
         - sum(λ_EOM[jh]*g[jh] for jh in JH)                     # revenue from EOM
         + I * (y - y_init)                                      # investment cost

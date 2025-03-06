@@ -27,10 +27,8 @@ function save_results(mdict::Dict, EOM::Dict, ADMM::Dict, results::Dict, data::D
         zone_df[!, "CM_price"]  = fill(results["λ"]["CM"][z][end], nT)
         for m in agents[:eom]
             if m in agents[:IC]                                        # interconnector results
-                z1, z2 = parse_agent_name(m) 
-                if z == z1 || z == z2
-                    zone_df[!, "$(m)"] = sign_for_zone(m, z) * results["g"][m][end]
-                end
+                zone_idx = findfirst(isequal(z), zones)
+                zone_df[!, "$(m)"] = results["g"]["NetworkManager"][end][:, zone_idx]
             elseif m in agents[:Gen]                                                           # generator results
                 zone_m, _ = parse_agent_name(m)
                 if zone_m == z

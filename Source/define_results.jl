@@ -2,8 +2,13 @@ function define_results!(data::Dict, results::Dict, ADMM::Dict, agents::Dict, zo
     # Store generation results per agent
     results["g"] = Dict()
     for m in agents[:eom]
-        results["g"][m] = CircularBuffer{Vector{Float64}}(data["CircularBufferSize"])
-        push!(results["g"][m], zeros(data["nTimesteps"]))
+        if m == "NetworkManager"
+            results["g"][m] = CircularBuffer{Matrix{Float64}}(data["CircularBufferSize"])
+            push!(results["g"][m], zeros(data["nTimesteps"], length(zones)))
+        else
+            results["g"][m] = CircularBuffer{Vector{Float64}}(data["CircularBufferSize"])
+            push!(results["g"][m], zeros(data["nTimesteps"]))
+        end
     end
 
     # Store installed capacity results for generators

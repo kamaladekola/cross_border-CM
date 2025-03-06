@@ -1,4 +1,4 @@
-function define_common_parameters!(m::String,mod::Model, data::Dict, ts::DataFrame, agents::Dict, scenario_overview_row::DataFrameRow)
+function define_common_parameters!(m::String,mod::Model, data::Dict, ts::DataFrame, agents::Dict, scenario_overview_row::DataFrameRow, zones::Vector{String})
 
     zone,_ = parse_agent_name(m)
     # Solver settings
@@ -12,22 +12,22 @@ function define_common_parameters!(m::String,mod::Model, data::Dict, ts::DataFra
 
     # Sets
     mod.ext[:sets][:JH] = 1:data["General"]["nTimesteps"]
+    mod.ext[:sets][:JZ] = 1:length(zones)
+    mod.ext[:sets][:JL] = 1:data["Network"]["nLines"]
   
     # Parameters related to the EOM
     mod.ext[:parameters][:λ_EOM] = zeros(data["General"]["nTimesteps"])     # Price structure
     mod.ext[:parameters][:g_bar] = zeros(data["General"]["nTimesteps"])     # ADMM penalty term
     mod.ext[:parameters][:ρ_EOM] = data["ADMM"]["rho_EOM"]                  # ADMM rho value
+    mod.ext[:parameters][:ρ_all] = ones(data["General"]["nTimesteps"])
 
     # # Parameters related to the electricity CM
     mod.ext[:parameters][:λ_CM] = 0                                         # Price structure
     mod.ext[:parameters][:cap_bar] = 0                                      # ADMM penalty term
     mod.ext[:parameters][:ρ_CM] = data["ADMM"]["rho_CM"]                    # ADMM rho value
 
-    mod.ext[:parameters][:CD] = data["CM"][zone]["capacity_target"]         # Get capacity target for zone Z
-    mod.ext[:parameters][:WTP_CM] = data["CM"][zone]["price_target"]         # Willingness to pay for capacity in the CM
-    mod.ext[:parameters][:CD_margin] = data["CM"][zone]["capacity_margin"] # Minimum willingness to pay for capacity in the CM
-
-    
-
+    # ADMM parameters for interconnectors
+    mod.ext[:parameters][:g_bar_all] = zeros(data["General"]["nTimesteps"], length(zones)) 
+    mod.ext[:parameters][:λ_all] = zeros(data["General"]["nTimesteps"], length(zones))
     return mod, agents
 end

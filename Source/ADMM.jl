@@ -8,14 +8,14 @@ function ADMM!(results::Dict,ADMM::Dict,EOM::Dict,CM::Dict,mdict::Dict,agents::D
             # Multi-threaded version
             @sync for m in agents[:all] 
                 # created subroutine to allow multi-treading to solve agents' decision problems
-                @spawn ADMM_subroutine!(m,results,ADMM,EOM,CM,mdict[m],agents,TO)
+                @spawn ADMM_subroutine!(m,results,ADMM,EOM,CM,mdict[m],agents,TO,zones)
             end
 
-            # Imbalances (for each zone)
+            # Imbalances (for each zone) - updated
             @timeit TO "Compute zonal imbalances" begin
                 for z in zones
-                    # push!(ADMM["Imbalances"]["EOM"][z], sum(results["g"][m][end] for m in agents[:zones][z]) - EOM["D"][z][:])
-                    push!(ADMM["Imbalances"]["EOM"][z], sum(is_interconnector(m) ? sign_for_zone(m, z) * results["g"][m][end] : results["g"][m][end] for m in agents[:eom_Z][z]))
+                    zone_idx = findfirst(isequal(z), zones)
+                    push!(ADMM["Imbalances"]["EOM"][z],  sum(results["g"][m][end] for m in agents[:eom_Z][z]) + results["g"]["NetworkManager"][end][:, zone_idx])
                     push!(ADMM["Imbalances"]["CM"][z], sum(results["cap_cm"][m][end] for m in agents[:cm_Z][z]))
                 end                                
             end
@@ -28,12 +28,21 @@ function ADMM!(results::Dict,ADMM::Dict,EOM::Dict,CM::Dict,mdict::Dict,agents::D
                 end
             end
 
+
             # Compute Dual Residuals for each zone
-            @timeit TO "Compute dual residuals" begin                            # agents[:eom] or agents[:zones]???
+            @timeit TO "Compute dual residuals" begin                           
                 if iter > 1
                     for z in zones
-                    push!(ADMM["Residuals"]["Dual"]["EOM"][z], sqrt(sum(sum((ADMM["ρ"]["EOM"][z][end]*((results["g"][m][end]-sum(results["g"][mstar][end] for mstar in agents[:eom_Z][z])./(EOM["nAgents_z"]+1)) - (results["g"][m][end-1]-sum(results["g"][mstar][end-1] for mstar in agents[:eom_Z][z])./(EOM["nAgents_z"]+1)))).^2 for m in agents[:eom_Z][z]))))
-                    push!(ADMM["Residuals"]["Dual"]["CM"][z], sqrt(sum(sum((ADMM["ρ"]["CM"][z][end]*((results["cap_cm"][m][end]-sum(results["cap_cm"][mstar][end] for mstar in agents[:cm_Z][z])./(CM["nAgents_z"]+1)) - (results["cap_cm"][m][end-1]-sum(results["cap_cm"][mstar][end-1] for mstar in agents[:cm_Z][z])./(CM["nAgents_z"]+1)))).^2 for m in agents[:cm_Z][z]))))
+                        zone_idx = findfirst(isequal(z), zones)
+                        NM_new = results["g"]["NetworkManager"][end][:, zone_idx]
+                        NM_prev = results["g"]["NetworkManager"][end-1][:, zone_idx]
+                        EOM_new = sum(results["g"][m][end] for m in agents[:eom_Z][z])
+                        EOM_prev = sum(results["g"][m][end-1] for m in agents[:eom_Z][z])
+                        
+                         # why EOM["nAgents"]+1? 
+                        push!(ADMM["Residuals"]["Dual"]["EOM"][z], sqrt(sum(sum((ADMM["ρ"]["EOM"][z][end]*((results["g"][m][end] - (EOM_new + NM_new)./(EOM["nAgents_z"][z]+1)) - (results["g"][m][end-1] - (EOM_prev + NM_prev)./(EOM["nAgents_z"][z]+1)))).^2 for m in agents[:eom_Z][z])) +
+                                sum((ADMM["ρ"]["EOM"][z][end]*((NM_new .- (EOM_new + NM_new)./(EOM["nAgents_z"][z]+1)) - (NM_prev .- (EOM_prev + NM_prev)./(EOM["nAgents_z"][z]+1)))).^2)))
+                        push!(ADMM["Residuals"]["Dual"]["CM"][z], sqrt(sum(sum((ADMM["ρ"]["CM"][z][end]*((results["cap_cm"][m][end]-sum(results["cap_cm"][mstar][end] for mstar in agents[:cm_Z][z])./(CM["nAgents_z"][z]+1)) - (results["cap_cm"][m][end-1]-sum(results["cap_cm"][mstar][end-1] for mstar in agents[:cm_Z][z])./(CM["nAgents_z"][z]+1)))).^2 for m in agents[:cm_Z][z]))))
                     end
                 end
             end

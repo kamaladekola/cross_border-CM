@@ -73,7 +73,7 @@ load = CSV.read(joinpath(home_dir,"Input","load.csv"),delim=";",DataFrame) # col
 pv = CSV.read(joinpath(home_dir,"Input","pv.csv"),delim=";",DataFrame)
 wind_offshore = CSV.read(joinpath(home_dir,"Input","wind_offshore.csv"),delim=";",DataFrame)
 wind_onshore = CSV.read(joinpath(home_dir,"Input","wind_onshore.csv"),delim=";",DataFrame)
-
+ptdf = CSV.read(joinpath(home_dir,"Input","ptdf.csv"),delim=";",DataFrame)
 # Overview scenarios
 scenario_overview = CSV.read(joinpath(home_dir,"overview_scenarios.csv"),DataFrame,delim=";")
 sensitivity_overview = CSV.read(joinpath(home_dir,"overview_sensitivity.csv"),DataFrame,delim=";") 
@@ -152,6 +152,13 @@ println("   ")
 ## 2. Initiate models for representative agents
 
 zones = string.(collect(keys(data["Consumers"])))
+
+# Parameters/variables EOM
+EOM = Dict()
+CM = Dict()
+
+EOM["nZones"] = length(zones)
+
 println("Existing zones:" , zones)
 println("   ")
 
@@ -163,7 +170,7 @@ agents[:IC] = String[]
 
 agents[:Gen] = ["Gen_$(z)_$(tech)" for z in zones for tech in keys(data["Generators"][z])] # generator agents for each zone and technology
 agents[:Cons] = ["Cons_$(z)" for z in zones] # consumer agents for each zone
-agents[:IC] = ["IC_$(z1)_$(z2)" for z1 in zones for z2 in zones if z1 < z2] # interconnectors
+agents[:IC] = ["NetworkManager"] # interconnectors
 
 
 agents[:all] = union(agents[:Gen],agents[:Cons], agents[:IC])                                         # all agents in the game  
@@ -173,10 +180,10 @@ agents[:cm] = union(agents[:Gen], agents[:Cons])                                
 # grouping agents by zone
 agents[:Gen_Z] = Dict(z => [m for m in agents[:Gen] if parse_agent_name(m)[1] == z] for z in zones)
 agents[:Cons_Z] = Dict(z => [m for m in agents[:Cons] if parse_agent_name(m)[1] == z] for z in zones)
-agents[:IC_Z] = Dict(z => [ m for m in agents[:IC] if (let (z1, z2) = parse_agent_name(m); z1 == z || z2 == z; end)] for z in zones)
 
-agents[:zones] = Dict(z => union(agents[:Gen_Z][z], agents[:Cons_Z][z], agents[:IC_Z][z]) for z in zones)       # agents in zone Z
-agents[:eom_Z] = Dict(z => union(agents[:Gen_Z][z], agents[:Cons_Z][z], agents[:IC_Z][z]) for z in zones)       # agents participating in zone Z participating in the EOM
+
+agents[:zones] = Dict(z => union(agents[:Gen_Z][z], agents[:Cons_Z][z]) for z in zones)       # agents in zone Z
+agents[:eom_Z] = Dict(z => union(agents[:Gen_Z][z], agents[:Cons_Z][z]) for z in zones)       # agents participating in zone Z participating in the EOM
 agents[:cm_Z] = Dict(z => union(agents[:Gen_Z][z], agents[:Cons_Z][z]) for z in zones)                                              # agents participating in zone Z participating in the CM -> may add agents[:Cons_Z] if demand response participates in the CM
 
 # create one model per agent
@@ -185,9 +192,9 @@ mdict = Dict{String, Model}(i => Model(optimizer_with_attributes(() -> Gurobi.Op
 # consumer models
 for m in agents[:Cons]
     zone, _ = parse_agent_name(m)
-    cons_data = merge(data["General"], data["Consumers"][zone])
+    cons_data = merge(data["General"], data["Consumers"][zone], data["CM"][zone])
 
-    define_common_parameters!(m, mdict[m], data, ts, agents, scenario_overview_row) # Parameters common to all agents
+    define_common_parameters!(m, mdict[m], data, ts, agents, scenario_overview_row, zones) # Parameters common to all agents
     define_consumer_parameters!(mdict[m], cons_data, load)                            # Consumers
 end
 
@@ -196,33 +203,27 @@ for m in agents[:Gen]
     zone, tech = parse_agent_name(m)
     gen_data = merge(data["General"], data["Generators"][zone][tech])
 
-    define_common_parameters!(m, mdict[m], data, ts, agents, scenario_overview_row) # Parameters common to all agents
+    define_common_parameters!(m, mdict[m], data, ts, agents, scenario_overview_row, zones) # Parameters common to all agents
     define_generator_parameters!(mdict[m], gen_data, ts)                            # Generators
 end
 
 # Interconnector models
 for m in agents[:IC]
-    z1, z2 = parse_agent_name(m)
-    ic_key = "$(z1)_$(z2)"
-    IC_data = merge(data["General"], data["InterconnectionCapacity"][ic_key])
-    define_common_parameters!(m, mdict[m], data, ts, agents, scenario_overview_row) # Parameters common to all agents
-    define_interconnector_parameters!(mdict[m], IC_data, ts)                 # Interconnectors
+    IC_data = merge(data["General"], data["Network"]) # need to figure out how to parse in data for all zones here
+    define_common_parameters!(m, mdict[m], data, ts, agents, scenario_overview_row, zones) # Parameters common to all agents
+    define_interconnector_parameters!(mdict[m], IC_data, zones, ptdf)                 # Interconnectors
 end
 
 
 ## 3. Define parameters for markets and representative agents
-# Parameters/variables EOM
-EOM = Dict()
-# define_EOM_parameters!(EOM,data,load,scenario_overview_row,zones)
 
-# Parameters/variables CM
-CM = Dict()
+# define_EOM_parameters!(EOM,data,load,scenario_overview_row,zones)
 
 # Calculate number of agents in each market
 EOM["nAgents"] = length(agents[:eom])
-EOM["nAgents_z"] = length(agents[:zones][zones[1]])
+EOM["nAgents_z"] = Dict(z => length(agents[:eom_Z][z]) for z in zones)
 CM["nAgents"] = length(agents[:cm])
-CM["nAgents_z"] = length(agents[:zones][zones[1]])
+CM["nAgents_z"] = Dict(z => length(agents[:cm_Z][z]) for z in zones)
 # println("Number of agents per zone: ", EOM["nAgents_z"])
 
 

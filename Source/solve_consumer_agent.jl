@@ -34,7 +34,7 @@ function solve_consumer_agent!(mod::Model)
     # Create affine expressions
     g_positive = mod.ext[:expressions][:g_positive] = @expression(mod, [jh=JH], g_VOLL[jh] + g_ela[jh])
 
-    utility = @expression(mod,                                                                                            # actually, negative utility
+    neg_utility = @expression(mod,                                                                                            # actually, negative utility
     sum((λ_EOM[jh] - WTP)*g_positive[jh] + (WTP/(2*ela*D[jh]))*(g_ela[jh])^2 for jh in JH)
     - σ_CM * λ_CM * cap_cm
     # - sum(WTP * ens[jh] for jh in JH)                                                                                     # cost of unserved energy (CUE)
@@ -42,7 +42,7 @@ function solve_consumer_agent!(mod::Model)
 
     # Objective => minimize negative utility (maximize utility)
     mod.ext[:objective] = @objective(mod, Min,
-    utility 
+    neg_utility 
     + sum(ρ_EOM/2 * (g[jh] - g_bar[jh])^2 for jh in JH)
     # + ρ_CM / 2 * (cap_cm - cap_bar)^2                                                                                  # may be used later
     )

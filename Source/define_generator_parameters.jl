@@ -13,10 +13,8 @@ function define_generator_parameters!(mod::Model, data::Dict,ts::DataFrame)
 
    # Availability factors
     if haskey(data,"AF")
-        # mod.ext[:timeseries][:AC] = data["C"]*ts[!,data["AF"]]  # deprecated
         mod.ext[:timeseries][:AF] = ts[!,data["AF"]]
     else
-        # mod.ext[:timeseries][:AC] = data["C"]*ones(data["nTimesteps"]) # deprecated
         mod.ext[:timeseries][:AF] = ones(data["nTimesteps"])
     end 
    

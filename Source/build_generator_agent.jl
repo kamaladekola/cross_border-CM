@@ -47,15 +47,8 @@ function build_generator_agent!(mod::Model)
     )
 
     # offered capacity in capacity markets
-    if σ_CM == 1
-        mod.ext[:constraints][:CM] = @constraint(mod, 
-            cap_cm <= y
-        )
-    else
-        mod.ext[:constraints][:CM] = @constraint(mod, 
-            cap_cm == 0
-        )
-    end
+    mod.ext[:constraints][:CM] = @constraint(mod, cap_cm <= σ_CM * y)
+
 
     return mod
 end

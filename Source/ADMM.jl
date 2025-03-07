@@ -51,7 +51,7 @@ function ADMM!(results::Dict,ADMM::Dict,EOM::Dict,CM::Dict,mdict::Dict,agents::D
             @timeit TO "Update prices" begin
                 for z in zones
                     push!(results["λ"]["EOM"][z], results["λ"]["EOM"][z][end] - ADMM["ρ"]["EOM"][z][end]/100*ADMM["Imbalances"]["EOM"][z][end])
-                    push!(results["λ"]["CM"][z], results["λ"]["CM"][z][end] - ADMM["ρ"]["CM"][z][end]*ADMM["Imbalances"]["CM"][z][end])
+                    push!(results["λ"]["CM"][z], results["λ"]["CM"][z][end] - ADMM["ρ"]["CM"][z][end]/100*ADMM["Imbalances"]["CM"][z][end])
                 end
             end
 

@@ -74,6 +74,8 @@ pv = CSV.read(joinpath(home_dir,"Input","pv.csv"),delim=";",DataFrame)
 wind_offshore = CSV.read(joinpath(home_dir,"Input","wind_offshore.csv"),delim=";",DataFrame)
 wind_onshore = CSV.read(joinpath(home_dir,"Input","wind_onshore.csv"),delim=";",DataFrame)
 ptdf = CSV.read(joinpath(home_dir,"Input","ptdf.csv"),delim=";",DataFrame)
+participation_matrix = CSV.read(joinpath(home_dir,"Input","participation_matrix.csv"),delim=";",DataFrame)
+
 # Overview scenarios
 scenario_overview = CSV.read(joinpath(home_dir,"overview_scenarios.csv"),DataFrame,delim=";")
 sensitivity_overview = CSV.read(joinpath(home_dir,"overview_sensitivity.csv"),DataFrame,delim=";") 

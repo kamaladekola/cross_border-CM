@@ -8,10 +8,10 @@ function build_consumer_agent!(mod::Model)
     # Extract parameters
     WTP = mod.ext[:parameters][:WTP]                  # value of lost load
     ela = mod.ext[:parameters][:ela]                  # fraction of demand that is elastic
-    CD = mod.ext[:parameters][:CD]                    # Capacity demand (administratively set?)
+    CD = mod.ext[:parameters][:CD]                    # if we want to use predefined Capacity demand
     CD_margin = mod.ext[:parameters][:CD_margin]      # capacity demand margin
     σ_CM = mod.ext[:parameters][:σ_CM]                # 1 if capacity markets are active, 0 otherwise
-    # D_max = mod.ext[:parameters][:D_max]            # maximum demand (can be used in place of CD)
+    D_max = mod.ext[:parameters][:D_max]            # maximum demand (can be used in place of CD)
     # WTP_CM = mod.ext[:parameters][:WTP_CM]          # Willingness to pay for capacity in the CM (price target)
 
     # ADMM parameters
@@ -35,9 +35,9 @@ function build_consumer_agent!(mod::Model)
     # Create affine expressions
     g_positive = mod.ext[:expressions][:g_positive] = @expression(mod, [jh=JH], g_VOLL[jh] + g_ela[jh])
 
-    neg_utility = @expression(mod,                                                                                            # actually, negative utility
+    neg_utility =  mod.ext[:expressions][:utility] = @expression(mod,                                                                                            # actually, negative utility
     sum((λ_EOM[jh] - WTP)*g_positive[jh] + (WTP/(2*ela*D[jh]))*(g_ela[jh])^2 for jh in JH)
-    - σ_CM * λ_CM * cap_cm
+    + (- σ_CM * λ_CM * cap_cm)
     # + sum(WTP * ens[jh] for jh in JH)                                                                                       # penalty on energy not served (called cost of unserved energy) in Kaminski (PhD thesis)
     )
 
@@ -53,11 +53,7 @@ function build_consumer_agent!(mod::Model)
     mod.ext[:constraints][:elastic_demand] = @constraint(mod, [jh=JH], g_ela[jh] <= ela * D[jh])                         # Elastic demand limit
     mod.ext[:constraints][:inelastic_demand] = @constraint(mod, [jh=JH], g_VOLL[jh] + ens[jh] == (1 - ela) * D[jh])      # Inelastic demand limit
 
-    if σ_CM == 1
-        mod.ext[:constraints][:CM] = @constraint(mod, cap_cm == -(1 + CD_margin)*CD)                                                     # capacity demand
-    else
-        mod.ext[:constraints][:CM] = @constraint(mod, cap_cm == 0)
-    end
+    mod.ext[:constraints][:CM] = @constraint(mod, cap_cm <= - σ_CM * (1 + CD_margin) * D_max)
 
     # Battery / electrolyzer model 
 

@@ -1,0 +1,10 @@
+agent;A;B;C
+Gen_A_Baseload;1;1;1
+Gen_A_MidMerit;1;1;1
+Gen_A_Peak;1;1;1
+Gen_B_Baseload;1;1;1
+Gen_B_MidMerit;1;1;1
+Gen_B_Peak;1;1;1
+Gen_C_Baseload;1;1;1
+Gen_C_MidMerit;1;1;1
+Gen_C_Peak;1;1;1

@@ -23,30 +23,51 @@ function save_results(mdict::Dict, EOM::Dict, ADMM::Dict, results::Dict, data::D
 
     for z in zones
         zone_df = DataFrame(Timestep = timesteps)
-        zone_df[!, "EOM_price"]  = results["λ"]["EOM"][z][end]
-        zone_df[!, "CM_price"]  = fill(results["λ"]["CM"][z][end], nT)
+        zone_df[!, "EOM_price"] = results["λ"]["EOM"][z][end]
+        zone_df[!, "CM_price"] = fill(results["λ"]["CM"][z][end], nT)
+        
+        zone_idx = findfirst(isequal(z), zones)
+        
+        # Add total capacity offered/demanded in zone
+        total_cap_offered = sum(results["cap_cm"][m][end][zone_idx] for m in agents[:cm] if m in agents[:Gen])
+        total_cap_demanded = sum(results["cap_cm"][m][end][zone_idx] for m in agents[:cm] if m in agents[:Cons])
+        zone_df[!, "TotalCapOffered"] = fill(total_cap_offered, nT)
+        zone_df[!, "TotalCapDemanded"] = fill(total_cap_demanded, nT)
+        
         for m in agents[:eom]
-            if m in agents[:IC]                                        # interconnector results
+            if m in agents[:IC]
                 zone_idx = findfirst(isequal(z), zones)
                 zone_df[!, "$(m)"] = results["g"]["NetworkManager"][end][:, zone_idx]
-            elseif m in agents[:Gen]                                                           # generator results
+            elseif m in agents[:Gen]
                 zone_m, _ = parse_agent_name(m)
                 if zone_m == z
                     zone_df[!, "$(m)"] = results["g"][m][end]
                     zone_df[!, "Capacity_$(m)"] = fill(results["y"][m][end], nT)
                     gen_name = get_agent_name(m)
                     zone_df[!, "new_capacity_$(m)"] = fill(results["y"][m][end] - data["Generators"][zone_m][gen_name]["C"], nT)
+                    
+                    if m in agents[:cm]
+                        for (tgt_idx, target_z) in enumerate(zones)
+                            zone_df[!, "Cap_to_$(target_z)_$(m)"] = fill(results["cap_cm"][m][end][tgt_idx], nT)
+                        end
+                    end
                 end
             elseif m in agents[:Cons]
                 cons_zone, _ = parse_agent_name(m)
                 if cons_zone == z
+                    # Existing consumer results
                     zone_df[!, "$(m)"] = results["g"][m][end]
                     zone_df[!, "Inelastic_$(m)"] = results["Cons"]["inelastic_demand"][m][end] .* -1
                     zone_df[!, "Elastic_$(m)"] = results["Cons"]["elastic_demand"][m][end] .* -1
                     zone_df[!, "ENS_$(m)"] = results["Cons"]["ENS"][m][end]
+                    
+                    if m in agents[:cm]
+                        zone_df[!, "CapDemand_$(m)"] = fill(results["cap_cm"][m][end][zone_idx], nT)
+                    end
                 end
             end
         end
+        
         CSV.write(joinpath(home_dir, "Results", "Scenario_$(scenario_overview_row["scen_number"])_EOM_Zone_$(z)_$(sens).csv"), zone_df; delim = ";")
     end
 end

@@ -35,8 +35,8 @@ function define_results!(data::Dict, results::Dict, ADMM::Dict, agents::Dict, zo
     # Store capacity offered by agents in the capacity market
     results["cap_cm"] = Dict()
     for m in agents[:cm]
-        results["cap_cm"][m] = CircularBuffer{Float64}(data["CircularBufferSize"])
-        push!(results["cap_cm"][m], 0.0)
+        results["cap_cm"][m] = CircularBuffer{Vector{Float64}}(data["CircularBufferSize"])
+        push!(results["cap_cm"][m], zeros(length(zones)))
     end
 
     # Prices for each zone in the EOM market
@@ -75,7 +75,7 @@ function define_results!(data::Dict, results::Dict, ADMM::Dict, agents::Dict, zo
         push!(ADMM["Residuals"]["Dual"]["CM"][z], 0.0)
     end
     
-    # Tolerance for EOM (assumed same for all zones)
+    # Tolerance for EOM and CM
     ADMM["Tolerance"] = Dict()
     ADMM["Tolerance"]["EOM"] = data["epsilon"]
     ADMM["Tolerance"]["CM"] = data["epsilon"]

@@ -13,10 +13,9 @@ function ADMM!(results::Dict,ADMM::Dict,EOM::Dict,CM::Dict,mdict::Dict,agents::D
 
             # Imbalances (for each zone) - updated
             @timeit TO "Compute zonal imbalances" begin
-                for z in zones
-                    zone_idx = findfirst(isequal(z), zones)
+                for (zone_idx, z) in enumerate(zones)
                     push!(ADMM["Imbalances"]["EOM"][z],  sum(results["g"][m][end] for m in agents[:eom_Z][z]) + results["g"]["NetworkManager"][end][:, zone_idx])
-                    push!(ADMM["Imbalances"]["CM"][z], sum(results["cap_cm"][m][end] for m in agents[:cm_Z][z]))
+                    push!(ADMM["Imbalances"]["CM"][z], sum(results["cap_cm"][m][end][zone_idx] for m in agents[:cm] if m in agents[:Gen]) - sum(results["cap_cm"][m][end][zone_idx] for m in agents[:cm] if m in agents[:Cons_Z][z]))
                 end                                
             end
 
@@ -51,7 +50,12 @@ function ADMM!(results::Dict,ADMM::Dict,EOM::Dict,CM::Dict,mdict::Dict,agents::D
             @timeit TO "Update prices" begin
                 for z in zones
                     push!(results["λ"]["EOM"][z], results["λ"]["EOM"][z][end] - ADMM["ρ"]["EOM"][z][end]/100*ADMM["Imbalances"]["EOM"][z][end])
-                    push!(results["λ"]["CM"][z], results["λ"]["CM"][z][end] - ADMM["ρ"]["CM"][z][end]/100*ADMM["Imbalances"]["CM"][z][end])
+                    # push!(results["λ"]["CM"][z], results["λ"]["CM"][z][end] - ADMM["ρ"]["CM"][z][end]/100*ADMM["Imbalances"]["CM"][z][end])
+                    # limit price update to investment cost of cheapest plant and no negative prices
+                    λ_CM_new = results["λ"]["CM"][z][end] - ADMM["ρ"]["CM"][z][end]/100*ADMM["Imbalances"]["CM"][z][end]
+                    λ_CM_new = max(λ_CM_new, data["CM"][z]["min_price"])
+                    λ_CM_new = min(λ_CM_new, data["CM"][z]["max_price"])
+                    push!(results["λ"]["CM"][z], λ_CM_new)
                 end
             end
 
@@ -60,17 +64,25 @@ function ADMM!(results::Dict,ADMM::Dict,EOM::Dict,CM::Dict,mdict::Dict,agents::D
                  update_rho!(ADMM,iter)
             end
 
-            # Progress bar for multi-zone
+            # Progress bar
             @timeit TO "Progress bar" begin
-                max_primal = maximum([ADMM["Residuals"]["Primal"]["EOM"][z][end] for z in zones])
-                max_dual   = maximum([ADMM["Residuals"]["Dual"]["EOM"][z][end] for z in zones])
-                set_description(iterations, @sprintf("Max Primal: %.3f, Max Dual: %.3f", max_primal, max_dual))
+                max_primal_eom = maximum([ADMM["Residuals"]["Primal"]["EOM"][z][end] for z in zones])
+                max_dual_eom   = maximum([ADMM["Residuals"]["Dual"]["EOM"][z][end] for z in zones])
+                
+                max_primal_cm = maximum([ADMM["Residuals"]["Primal"]["CM"][z][end] for z in zones])
+                max_dual_cm   = maximum([ADMM["Residuals"]["Dual"]["CM"][z][end] for z in zones])
+                
+                set_description(iterations, @sprintf("Max EOM-Primal: %.3f, EOM-Dual: %.3f, CM-Primal: %.3f, CM-Dual: %.3f", max_primal_eom, max_dual_eom, max_primal_cm, max_dual_cm))
             end
-
-            # Check convergence: primal and dual satisfy tolerance for each zone
-            if all(ADMM["Residuals"]["Primal"]["EOM"][z][end] <= ADMM["Tolerance"]["EOM"] for z in zones) && all(ADMM["Residuals"]["Dual"]["EOM"][z][end] <= ADMM["Tolerance"]["EOM"] for z in zones)
+            
+            # Check convergence: primal and dual satisfy tolerance for each zone's EOM and CM
+            if all(ADMM["Residuals"]["Primal"]["EOM"][z][end] ≤ ADMM["Tolerance"]["EOM"] for z in zones) &&
+               all(ADMM["Residuals"]["Dual"]["EOM"][z][end] ≤ ADMM["Tolerance"]["EOM"] for z in zones) &&
+               all(ADMM["Residuals"]["Primal"]["CM"][z][end] ≤ ADMM["Tolerance"]["CM"]  for z in zones) &&
+               all(ADMM["Residuals"]["Dual"]["CM"][z][end] ≤ ADMM["Tolerance"]["CM"]  for z in zones)
                 convergence = 1
             end
+            
 
             # store number of iterations
             ADMM["n_iter"] = copy(iter)

@@ -10,6 +10,7 @@ function define_generator_parameters!(mod::Model, data::Dict,ts::DataFrame)
 
     mod.ext[:parameters][:σ_CM] = data["sigmaCM"]
 
+    # mod.ext[:parameters][:participation_matrix] = data["participation_matrix"]
 
    # Availability factors
     if haskey(data,"AF")

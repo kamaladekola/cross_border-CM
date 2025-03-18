@@ -27,19 +27,21 @@ function ADMM_subroutine!(m::String, results::Dict, ADMM::Dict, EOM::Dict, CM::D
     
             # Update CM penalty terms
             if m in agents[:cm]
-                mod.ext[:parameters][:cap_bar] = results["cap_cm"][m][end] - 1/(CM["nAgents_z"][zone]+1) * last(ADMM["Imbalances"]["CM"][zone])
-                mod.ext[:parameters][:λ_CM] = last(results["λ"]["CM"][zone])
-                mod.ext[:parameters][:ρ_CM] = last(ADMM["ρ"]["CM"][zone])
+                for (zone_idx, z) in enumerate(zones)
+                    mod.ext[:parameters][:cap_bar][zone_idx] = results["cap_cm"][m][end][zone_idx] - (1/(CM["nAgents_z"][z]+1)) * last(ADMM["Imbalances"]["CM"][z])
+                end
+                mod.ext[:parameters][:λ_CM] = hcat([last(results["λ"]["CM"][zone]) for zone in zones]...)
+                mod.ext[:parameters][:ρ_CM] = [last(ADMM["ρ"]["CM"][zone]) for zone in zones]
             end 
         end
     
         if m in agents[:Gen]
             @timeit TO_local "Solve generator problems" begin
-                solve_generator_agent!(mod)
+                solve_generator_agent!(mod, m, zones)
             end
         elseif m in agents[:Cons]
             @timeit TO_local "Solve consumer problems" begin
-                solve_consumer_agent!(mod)
+                solve_consumer_agent!(mod, m, zones)
             end
         end
     end
@@ -51,7 +53,7 @@ function ADMM_subroutine!(m::String, results::Dict, ADMM::Dict, EOM::Dict, CM::D
             push!(results["y"][m], value(mod.ext[:variables][:y]))
             # Update capacity market results if this agent participates in CM
             if m in agents[:cm]
-                push!(results["cap_cm"][m], value(mod.ext[:variables][:cap_cm]))
+                push!(results["cap_cm"][m], collect(value.(mod.ext[:variables][:cap_cm])))
             end
         elseif m in agents[:Cons]
             push!(results["g"][m], collect(value.(mod.ext[:variables][:g])))
@@ -60,7 +62,7 @@ function ADMM_subroutine!(m::String, results::Dict, ADMM::Dict, EOM::Dict, CM::D
             push!(results["Cons"]["ENS"][m], collect(value.(mod.ext[:variables][:ens])))
             # Update capacity market results if this agent participates in CM
             if m in agents[:cm]
-                push!(results["cap_cm"][m], value(mod.ext[:variables][:cap_cm]))
+                push!(results["cap_cm"][m], collect(value.(mod.ext[:variables][:cap_cm])))
             end
         elseif m == "NetworkManager"
             push!(results["g"][m], collect(value.(mod.ext[:variables][:g])))

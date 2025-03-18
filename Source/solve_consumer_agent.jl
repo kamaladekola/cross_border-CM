@@ -1,6 +1,7 @@
-function solve_consumer_agent!(mod::Model)
+function solve_consumer_agent!(mod::Model, m::String, zones::Vector{String})
     # Extract sets
     JH = mod.ext[:sets][:JH]
+    JZ = mod.ext[:sets][:JZ]
     # Extract time series data
     D = mod.ext[:timeseries][:D] 
 
@@ -12,6 +13,7 @@ function solve_consumer_agent!(mod::Model)
     # WTP_CM = mod.ext[:parameters][:WTP_CM]          # Willingness to pay for capacity in the CM (price target)
     # CD_margin = mod.ext[:parameters][:CD_margin]    # capacity demand margin
     σ_CM = mod.ext[:parameters][:σ_CM]                # 1 if capacity markets are active, 0 otherwise
+    PM = mod.ext[:parameters][:participation_matrix]
 
     # ADMM parameters
     λ_EOM = mod.ext[:parameters][:λ_EOM]            # EOM prices
@@ -20,8 +22,6 @@ function solve_consumer_agent!(mod::Model)
     λ_CM = mod.ext[:parameters][:λ_CM]              # CM prices
     ρ_CM = mod.ext[:parameters][:ρ_CM]              # rho-value in ADMM related to capacity markets
     cap_bar = mod.ext[:parameters][:cap_bar]        # element in ADMM penalty term related to capacity markets
-
-
 
 
     # Create variables
@@ -36,7 +36,7 @@ function solve_consumer_agent!(mod::Model)
 
     neg_utility =  mod.ext[:expressions][:utility] = @expression(mod,                                                                                            # actually, negative utility
     sum((λ_EOM[jh] - WTP)*g_positive[jh] + (WTP/(2*ela*D[jh]))*(g_ela[jh])^2 for jh in JH)
-    + (- σ_CM * λ_CM * cap_cm)
+    + σ_CM * sum(λ_CM[jz] * cap_cm[jz] * PM[m][zones[jz]] for jz in JZ)
     # + sum(WTP * ens[jh] for jh in JH)                                                                                       # penalty on energy not served (called cost of unserved energy) in Kaminski (PhD thesis)
     )
 
@@ -44,9 +44,9 @@ function solve_consumer_agent!(mod::Model)
     mod.ext[:objective] = @objective(mod, Min,
     neg_utility 
     + sum(ρ_EOM/2 * (g[jh] - g_bar[jh])^2 for jh in JH)
-    + σ_CM * ρ_CM / 2 * (cap_cm - cap_bar)^2                # ADMM penalty term for capacity markets
+    + σ_CM * sum(ρ_CM[jz]/2 * PM[m][zones[jz]] * (cap_cm[jz] - cap_bar[jz])^2 for jz in JZ)                # ADMM penalty term for capacity markets
     )
-
+    
     optimize!(mod);
 
     return mod

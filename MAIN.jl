@@ -76,6 +76,7 @@ wind_onshore = CSV.read(joinpath(home_dir,"Input","wind_onshore.csv"),delim=";",
 ptdf = CSV.read(joinpath(home_dir,"Input","ptdf.csv"),delim=";",DataFrame)
 participation_matrix = CSV.read(joinpath(home_dir,"Input","participation_matrix.csv"),delim=";",DataFrame)
 
+
 # Overview scenarios
 scenario_overview = CSV.read(joinpath(home_dir,"overview_scenarios.csv"),DataFrame,delim=";")
 sensitivity_overview = CSV.read(joinpath(home_dir,"overview_sensitivity.csv"),DataFrame,delim=";") 
@@ -153,7 +154,8 @@ println("   ")
 
 ## 2. Initiate models for representative agents
 
-zones = string.(collect(keys(data["Consumers"])))
+# Create an ordered list of zones to ensure consistent ordering throughout the code
+zones = sort(string.(collect(keys(data["Consumers"]))))
 
 # Parameters/variables EOM
 EOM = Dict()
@@ -196,7 +198,7 @@ for m in agents[:Cons]
     zone, _ = parse_agent_name(m)
     cons_data = merge(data["General"], data["Consumers"][zone], data["CM"][zone])
 
-    define_common_parameters!(m, mdict[m], data, ts, agents, scenario_overview_row, zones) # Parameters common to all agents
+    define_common_parameters!(m, mdict[m], data, ts, agents, scenario_overview_row, zones,participation_matrix) # Parameters common to all agents
     define_consumer_parameters!(mdict[m], cons_data, load)                            # Consumers
 end
 
@@ -205,14 +207,14 @@ for m in agents[:Gen]
     zone, tech = parse_agent_name(m)
     gen_data = merge(data["General"], data["Generators"][zone][tech])
 
-    define_common_parameters!(m, mdict[m], data, ts, agents, scenario_overview_row, zones) # Parameters common to all agents
+    define_common_parameters!(m, mdict[m], data, ts, agents, scenario_overview_row, zones,participation_matrix) # Parameters common to all agents
     define_generator_parameters!(mdict[m], gen_data, ts)                            # Generators
 end
 
 # Interconnector models
 for m in agents[:IC]
     IC_data = merge(data["General"], data["Network"]) # need to figure out how to parse in data for all zones here
-    define_common_parameters!(m, mdict[m], data, ts, agents, scenario_overview_row, zones) # Parameters common to all agents
+    define_common_parameters!(m, mdict[m], data, ts, agents, scenario_overview_row, zones,participation_matrix) # Parameters common to all agents
     define_interconnector_parameters!(mdict[m], IC_data, zones, ptdf)                 # Interconnectors
 end
 
@@ -236,10 +238,10 @@ println("   ")
 
 ## 4. Build models
 for m in agents[:Cons]
-    build_consumer_agent!(mdict[m])
+    build_consumer_agent!(mdict[m], m, zones)
 end
 for m in agents[:Gen]
-    build_generator_agent!(mdict[m])
+    build_generator_agent!(mdict[m], m, zones)
 end
 for m in agents[:IC]
     build_interconnector_agent!(mdict[m])
@@ -272,6 +274,8 @@ println(string("        "))
 for zone in zones
     println(string("RP EOM for zone ", zone, ": ", ADMM["Residuals"]["Primal"]["EOM"][zone][end], " -- Tolerance: ", ADMM["Tolerance"]["EOM"]))
     println(string("RD EOM for zone ", zone, ": ", ADMM["Residuals"]["Dual"]["EOM"][zone][end], " -- Tolerance: ", ADMM["Tolerance"]["EOM"]))
+    println(string("RP CM for zone ", zone, ": ", ADMM["Residuals"]["Primal"]["CM"][zone][end], " -- Tolerance: ", ADMM["Tolerance"]["CM"]))
+    println(string("RD CM for zone ", zone, ": ", ADMM["Residuals"]["Dual"]["CM"][zone][end], " -- Tolerance: ", ADMM["Tolerance"]["CM"]))
 end
 
 println(string("        "))

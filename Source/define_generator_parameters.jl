@@ -1,4 +1,4 @@
-function define_generator_parameters!(mod::Model, data::Dict,ts::DataFrame)
+function define_generator_parameters!(mod::Model, data::Dict,ts::DataFrame, af::DataFrame)
     # Parameters 
     mod.ext[:parameters][:A] = data["a"]
     mod.ext[:parameters][:B] = data["b"]
@@ -10,14 +10,13 @@ function define_generator_parameters!(mod::Model, data::Dict,ts::DataFrame)
 
     mod.ext[:parameters][:σ_CM] = data["sigmaCM"]
 
-    # mod.ext[:parameters][:participation_matrix] = data["participation_matrix"]
 
    # Availability factors
     if haskey(data,"AF")
-        mod.ext[:timeseries][:AF] = ts[!,data["AF"]]
+        mod.ext[:timeseries][:AF] = af[!,data["AF"]]
     else
         mod.ext[:timeseries][:AF] = ones(data["nTimesteps"])
     end 
-   
+
     return mod
 end

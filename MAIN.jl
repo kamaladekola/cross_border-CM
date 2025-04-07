@@ -54,15 +54,18 @@ include(joinpath(home_dir,"Source","define_EOM_parameters.jl"))
 include(joinpath(home_dir,"Source","define_consumer_parameters.jl"))
 include(joinpath(home_dir,"Source","define_generator_parameters.jl"))
 include(joinpath(home_dir,"Source","define_interconnector_parameters.jl")) # added interconnector parameters
+include(joinpath(home_dir,"Source","define_capacityIC_parameters.jl")) # added capacity manager parameters
 include(joinpath(home_dir,"Source","build_consumer_agent.jl"))
 include(joinpath(home_dir,"Source","build_generator_agent.jl"))
 include(joinpath(home_dir,"Source","build_interconnector_agent.jl")) # added interconnector agent
+include(joinpath(home_dir,"Source","build_capacityIC_agent.jl")) # added capacity manager agent
 include(joinpath(home_dir,"Source","define_results.jl"))
 include(joinpath(home_dir,"Source","ADMM.jl"))
 include(joinpath(home_dir,"Source","ADMM_subroutine.jl"))
 include(joinpath(home_dir,"Source","solve_consumer_agent.jl"))
 include(joinpath(home_dir,"Source","solve_generator_agent.jl"))
 include(joinpath(home_dir,"Source","solve_interconnector_agent.jl")) # added interconnector agent
+include(joinpath(home_dir,"Source","solve_capacityIC_agent.jl")) # added capacity manager agent
 include(joinpath(home_dir,"Source","update_rho.jl"))
 include(joinpath(home_dir,"Source","save_results.jl"))
 
@@ -75,7 +78,8 @@ wind_offshore = CSV.read(joinpath(home_dir,"Input","wind_offshore.csv"),delim=";
 wind_onshore = CSV.read(joinpath(home_dir,"Input","wind_onshore.csv"),delim=";",DataFrame)
 ptdf = CSV.read(joinpath(home_dir,"Input","ptdf.csv"),delim=";",DataFrame)
 participation_matrix = CSV.read(joinpath(home_dir,"Input","participation_matrix.csv"),delim=";",DataFrame)
-
+derating_factor = CSV.read(joinpath(home_dir,"Input","derating_factor.csv"),delim=";",DataFrame)
+np_max = CSV.read(joinpath(home_dir,"Input","np_max.csv"),delim=";",DataFrame)
 
 # Overview scenarios
 scenario_overview = CSV.read(joinpath(home_dir,"overview_scenarios.csv"),DataFrame,delim=";")
@@ -175,11 +179,12 @@ agents[:IC] = String[]
 agents[:Gen] = ["Gen_$(z)_$(tech)" for z in zones for tech in keys(data["Generators"][z])] # generator agents for each zone and technology
 agents[:Cons] = ["Cons_$(z)" for z in zones] # consumer agents for each zone
 agents[:IC] = ["NetworkManager"] # interconnectors
+agents[:CIC] = ["CapacityManager"] # Available capacity under scarcity
 
 
-agents[:all] = union(agents[:Gen],agents[:Cons], agents[:IC])                                         # all agents in the game  
+agents[:all] = union(agents[:Gen],agents[:Cons], agents[:IC], agents[:CIC])                                         # all agents in the game  
 agents[:eom] = union(agents[:Gen],agents[:Cons], agents[:IC])                                         # agents participating in the EOM                           
-agents[:cm] = union(agents[:Gen], agents[:Cons])                                                                     # agents participating in the CM -> may add agents[:Cons] if demand response participates in the CM
+agents[:cm] = union(agents[:Gen], agents[:Cons], agents[:CIC])                                                                     # agents participating in the CM -> may add agents[:Cons] if demand response participates in the CM
 
 # grouping agents by zone
 agents[:Gen_Z] = Dict(z => [m for m in agents[:Gen] if parse_agent_name(m)[1] == z] for z in zones)
@@ -198,7 +203,7 @@ for m in agents[:Cons]
     zone, _ = parse_agent_name(m)
     cons_data = merge(data["General"], data["Consumers"][zone], data["CM"][zone])
 
-    define_common_parameters!(m, mdict[m], data, ts, agents, scenario_overview_row, zones,participation_matrix) # Parameters common to all agents
+    define_common_parameters!(m, mdict[m], data, ts, agents, scenario_overview_row, zones, participation_matrix, derating_factor) # Parameters common to all agents
     define_consumer_parameters!(mdict[m], cons_data, load)                            # Consumers
 end
 
@@ -206,16 +211,31 @@ end
 for m in agents[:Gen]
     zone, tech = parse_agent_name(m)
     gen_data = merge(data["General"], data["Generators"][zone][tech])
-
-    define_common_parameters!(m, mdict[m], data, ts, agents, scenario_overview_row, zones,participation_matrix) # Parameters common to all agents
-    define_generator_parameters!(mdict[m], gen_data, ts)                            # Generators
+    if tech == "WindOnshore"
+        af = wind_onshore
+    elseif tech == "PV"
+        af = pv
+    else
+        af = DataFrame(A = ones(data["General"]["nTimesteps"]), 
+        B = ones(data["General"]["nTimesteps"]), 
+        C = ones(data["General"]["nTimesteps"]))
+    end
+    define_common_parameters!(m, mdict[m], data, ts, agents, scenario_overview_row, zones, participation_matrix, derating_factor) # Parameters common to all agents
+    define_generator_parameters!(mdict[m], gen_data, ts, af)                            # Generators
 end
 
 # Interconnector models
 for m in agents[:IC]
-    IC_data = merge(data["General"], data["Network"]) # need to figure out how to parse in data for all zones here
-    define_common_parameters!(m, mdict[m], data, ts, agents, scenario_overview_row, zones,participation_matrix) # Parameters common to all agents
+    IC_data = merge(data["General"], data["Network"])
+    define_common_parameters!(m, mdict[m], data, ts, agents, scenario_overview_row, zones, participation_matrix, derating_factor) # Parameters common to all agents
     define_interconnector_parameters!(mdict[m], IC_data, zones, ptdf)                 # Interconnectors
+end
+
+# Capacity manager models
+for m in agents[:CIC]
+    CM_data = merge(data["General"], data["Network"]) # change to scarcity data
+    define_common_parameters!(m, mdict[m], data, ts, agents, scenario_overview_row, zones, participation_matrix, derating_factor)  # Parameters common to all agents
+    define_capacityIC_parameters!(mdict[m], CM_data, zones, ptdf, np_max) # Capacity manager
 end
 
 
@@ -245,6 +265,9 @@ for m in agents[:Gen]
 end
 for m in agents[:IC]
     build_interconnector_agent!(mdict[m])
+end
+for m in agents[:CIC]
+    build_capacityIC_agent!(mdict[m])
 end
 
 println("Build model: done")

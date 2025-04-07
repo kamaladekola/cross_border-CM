@@ -1,4 +1,4 @@
-function define_common_parameters!(m::String,mod::Model, data::Dict, ts::DataFrame, agents::Dict, scenario_overview_row::DataFrameRow, zones::Vector{String}, participation_matrix::DataFrame)
+function define_common_parameters!(m::String,mod::Model, data::Dict, ts::DataFrame, agents::Dict, scenario_overview_row::DataFrameRow, zones::Vector{String}, participation_matrix::DataFrame, derating_factor::DataFrame)
 
     # zone,_ = parse_agent_name(m)
     # Solver settings
@@ -39,6 +39,19 @@ function define_common_parameters!(m::String,mod::Model, data::Dict, ts::DataFra
 
     data["General"]["participation_matrix"] = participation_switch
     mod.ext[:parameters][:participation_matrix] = data["General"]["participation_matrix"]
+
+    # Derating factors
+    derating_switch = Dict{String, Dict{String, Float64}}()
+
+    for m in eachrow(derating_factor)
+        agent_name = m[:agent]
+        derating_switch[agent_name] = Dict(z => m[Symbol(z)] for z in zones)
+    end
+
+    data["General"]["derating_factor"] = derating_switch
+    mod.ext[:parameters][:derating_factor] = data["General"]["derating_factor"]
+
+    mod.ext[:parameters][:w] = ts[!, :weights][1:data["General"]["nTimesteps"]]
 
     return mod, agents
 end

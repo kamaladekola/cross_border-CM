@@ -30,14 +30,19 @@ function save_results(mdict::Dict, EOM::Dict, ADMM::Dict, results::Dict, data::D
         
         # Add total capacity offered/demanded in zone
         total_cap_offered = sum(results["cap_cm"][m][end][zone_idx] for m in agents[:cm] if m in agents[:Gen])
+        total_local_cap_offered = sum(sum(results["cap_cm"][m][end]) for m in agents[:cm_Z][z] if m in agents[:Gen])
         total_cap_demanded = sum(results["cap_cm"][m][end][zone_idx] for m in agents[:cm] if m in agents[:Cons])
-        zone_df[!, "TotalCapOffered"] = fill(total_cap_offered, nT)
+        zone_df[!, "TotalCapOffer"] = fill(total_cap_offered, nT)
         zone_df[!, "TotalCapDemanded"] = fill(total_cap_demanded, nT)
+        zone_df[!, "TotalLocalCapSupply"] = fill(total_local_cap_offered, nT)
         
-        for m in agents[:eom]
+        for m in agents[:all]
             if m in agents[:IC]
                 zone_idx = findfirst(isequal(z), zones)
                 zone_df[!, "$(m)"] = results["g"]["NetworkManager"][end][:, zone_idx]
+            elseif m in agents[:CIC]
+                zone_idx = findfirst(isequal(z), zones)
+                zone_df[!, "$(m)"] = fill(results["cap_cm"][m][end][zone_idx], nT)
             elseif m in agents[:Gen]
                 zone_m, _ = parse_agent_name(m)
                 if zone_m == z
@@ -49,6 +54,9 @@ function save_results(mdict::Dict, EOM::Dict, ADMM::Dict, results::Dict, data::D
                     if m in agents[:cm]
                         for (tgt_idx, target_z) in enumerate(zones)
                             zone_df[!, "Cap_to_$(target_z)_$(m)"] = fill(results["cap_cm"][m][end][tgt_idx], nT)
+                                # Sum capacity offered FROM current zone z TO target zone
+                                local_cap_to_target = sum(results["cap_cm"][m][end][tgt_idx] for m in agents[:cm_Z][z] if m in agents[:Gen])
+                                zone_df[!, "Offered_Cap_from_$(z)_to_$(target_z)"] = fill(local_cap_to_target, nT)
                         end
                     end
                 end

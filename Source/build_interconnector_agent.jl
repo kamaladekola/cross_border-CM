@@ -3,6 +3,8 @@ function build_interconnector_agent!(mod::Model)
     JZ = mod.ext[:sets][:JZ]
     JL = mod.ext[:sets][:JL]
 
+    W = mod.ext[:parameters][:w]
+
     RAM = mod.ext[:parameters][:RAM] 
     PTDF = mod.ext[:parameters][:PTDF]
 
@@ -18,8 +20,8 @@ function build_interconnector_agent!(mod::Model)
 
     # Objective
     mod.ext[:objective] = @objective(mod, Min, 
-    -sum(λ_all[jh,jz] * g[jh,jz] for jh in JH, jz in JZ)
-    + sum((ρ_all[jz]/2) * (g[jh,jz] - g_bar_all[jh,jz])^2 
+    - sum(W[jh] * λ_all[jh,jz] * g[jh,jz] for jh in JH, jz in JZ)
+    + sum(W[jh] * (ρ_all[jz]/2) * (g[jh,jz] - g_bar_all[jh,jz])^2 
     for jh in JH, jz in JZ))
 
     # Constraints

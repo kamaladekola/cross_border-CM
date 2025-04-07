@@ -3,7 +3,8 @@ function solve_consumer_agent!(mod::Model, m::String, zones::Vector{String})
     JH = mod.ext[:sets][:JH]
     JZ = mod.ext[:sets][:JZ]
     # Extract time series data
-    D = mod.ext[:timeseries][:D] 
+    D = mod.ext[:timeseries][:D]
+    W = mod.ext[:parameters][:w] 
 
     # Extract parameters
     WTP = mod.ext[:parameters][:WTP]                  # value of lost load
@@ -34,19 +35,18 @@ function solve_consumer_agent!(mod::Model, m::String, zones::Vector{String})
     # Create affine expressions
     g_positive = mod.ext[:expressions][:g_positive] = @expression(mod, [jh=JH], g_VOLL[jh] + g_ela[jh])
 
-    neg_utility =  mod.ext[:expressions][:utility] = @expression(mod,                                                                                            # actually, negative utility
-    sum((λ_EOM[jh] - WTP)*g_positive[jh] + (WTP/(2*ela*D[jh]))*(g_ela[jh])^2 for jh in JH)
+    neg_utility = mod.ext[:expressions][:utility] = @expression(mod,                                                                                           
+    sum(W[jh] * ((λ_EOM[jh] - WTP)*g_positive[jh] + (WTP/(2*ela*D[jh]))*(g_ela[jh])^2) for jh in JH)
     + σ_CM * sum(λ_CM[jz] * cap_cm[jz] * PM[m][zones[jz]] for jz in JZ)
-    # + sum(WTP * ens[jh] for jh in JH)                                                                                       # penalty on energy not served (called cost of unserved energy) in Kaminski (PhD thesis)
+    # + sum(W[jh] * WTP * ens[jh] for jh in JH)
     )
 
     # Objective => minimize negative utility (maximize utility)
     mod.ext[:objective] = @objective(mod, Min,
     neg_utility 
-    + sum(ρ_EOM/2 * (g[jh] - g_bar[jh])^2 for jh in JH)
-    + σ_CM * sum(ρ_CM[jz]/2 * PM[m][zones[jz]] * (cap_cm[jz] - cap_bar[jz])^2 for jz in JZ)                # ADMM penalty term for capacity markets
+    + sum(W[jh] * ρ_EOM/2 * (g[jh] - g_bar[jh])^2 for jh in JH)
+    + σ_CM * sum(ρ_CM[jz]/2 * PM[m][zones[jz]] * (cap_cm[jz] - cap_bar[jz])^2 for jz in JZ)
     )
-    
     optimize!(mod);
 
     return mod

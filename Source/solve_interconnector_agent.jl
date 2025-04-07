@@ -2,7 +2,7 @@ function solve_interconnector_agent!(mod::Model)
     # Extract sets
     JH = mod.ext[:sets][:JH]
     JZ = mod.ext[:sets][:JZ]
-
+    W = mod.ext[:parameters][:w]
 
 
     λ_all = mod.ext[:parameters][:λ_all]  # λ_EOM[t,z]
@@ -16,8 +16,8 @@ function solve_interconnector_agent!(mod::Model)
 
     # Objective
     mod.ext[:objective] = @objective(mod, Min, 
-    -sum(λ_all[jh,jz] * g[jh,jz] for jh in JH, jz in JZ)
-    + sum((ρ_all[jz]/2) * (g[jh,jz] - g_bar_all[jh,jz])^2 
+    - sum(W[jh] * λ_all[jh,jz] * g[jh,jz] for jh in JH, jz in JZ)
+    + sum(W[jh] * (ρ_all[jz]/2) * (g[jh,jz] - g_bar_all[jh,jz])^2 
     for jh in JH, jz in JZ))
 
 

@@ -14,8 +14,21 @@ function ADMM_subroutine!(m::String, results::Dict, ADMM::Dict, EOM::Dict, CM::D
             mod.ext[:parameters][:ρ_all] = [last(ADMM["ρ"]["EOM"][z]) for z in zones]
         end
 
-        @timeit TO_local "Solve network manager problems" begin
+        @timeit TO_local "Solve network manager problem" begin
             solve_interconnector_agent!(mod)
+        end
+    elseif m == "CapacityManager"
+        # Add special handling for CapacityManager
+        @timeit TO_local "Compute CapacityManager penalty terms" begin
+            for (zone_idx, z) in enumerate(zones)
+                mod.ext[:parameters][:cap_bar][zone_idx] = results["cap_cm"][m][end][zone_idx] - (1/(CM["nAgents_z"][z]+1)) * last(ADMM["Imbalances"]["CM"][z])
+            end
+            mod.ext[:parameters][:λ_CM] = hcat([last(results["λ"]["CM"][zone]) for zone in zones]...)
+            mod.ext[:parameters][:ρ_CM] = [last(ADMM["ρ"]["CM"][zone]) for zone in zones]
+        end
+        
+        @timeit TO_local "Solve capacity manager problem" begin
+            solve_capacityIC_agent!(mod)
         end
     else
         # i.e Gen and Cons agents
@@ -32,9 +45,13 @@ function ADMM_subroutine!(m::String, results::Dict, ADMM::Dict, EOM::Dict, CM::D
                 end
                 mod.ext[:parameters][:λ_CM] = hcat([last(results["λ"]["CM"][zone]) for zone in zones]...)
                 mod.ext[:parameters][:ρ_CM] = [last(ADMM["ρ"]["CM"][zone]) for zone in zones]
+                # mod.ext[:parameters][:cap_bar_all] = mod.ext[:parameters][:cap_bar]
+                # mod.ext[:parameters][:λ_cm_all] = mod.ext[:parameters][:λ_CM]
+                # mod.ext[:parameters][:ρ_cm_all] = mod.ext[:parameters][:ρ_CM]
             end 
         end
-    
+
+
         if m in agents[:Gen]
             @timeit TO_local "Solve generator problems" begin
                 solve_generator_agent!(mod, m, zones)
@@ -42,6 +59,10 @@ function ADMM_subroutine!(m::String, results::Dict, ADMM::Dict, EOM::Dict, CM::D
         elseif m in agents[:Cons]
             @timeit TO_local "Solve consumer problems" begin
                 solve_consumer_agent!(mod, m, zones)
+            end
+        elseif m == "CapacityManager"
+            @timeit TO_local "Solve capacity manager problem" begin
+                solve_capacityIC_agent!(mod, data, zones)
             end
         end
     end
@@ -66,6 +87,9 @@ function ADMM_subroutine!(m::String, results::Dict, ADMM::Dict, EOM::Dict, CM::D
             end
         elseif m == "NetworkManager"
             push!(results["g"][m], collect(value.(mod.ext[:variables][:g])))
+
+        elseif m == "CapacityManager"
+            push!(results["cap_cm"][m], collect(value.(mod.ext[:variables][:cap_cm])))
         end
     end
 

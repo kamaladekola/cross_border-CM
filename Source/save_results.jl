@@ -53,10 +53,10 @@ function save_results(mdict::Dict, EOM::Dict, ADMM::Dict, results::Dict, data::D
                     
                     if m in agents[:cm]
                         for (tgt_idx, target_z) in enumerate(zones)
-                            zone_df[!, "Cap_to_$(target_z)_$(m)"] = fill(results["cap_cm"][m][end][tgt_idx], nT)
-                                # Sum capacity offered FROM current zone z TO target zone
-                                local_cap_to_target = sum(results["cap_cm"][m][end][tgt_idx] for m in agents[:cm_Z][z] if m in agents[:Gen])
-                                zone_df[!, "Offered_Cap_from_$(z)_to_$(target_z)"] = fill(local_cap_to_target, nT)
+                            # zone_df[!, "Cap_to_$(target_z)_$(m)"] = fill(results["cap_cm"][m][end][tgt_idx], nT)
+                            # Sum capacity offered FROM current zone z TO target zone
+                            local_cap_to_target = sum(results["cap_cm"][m][end][tgt_idx] for m in agents[:cm_Z][z] if m in agents[:Gen])
+                            # zone_df[!, "Offered_Cap_from_$(z)_to_$(target_z)"] = fill(local_cap_to_target, nT)
                         end
                     end
                 end

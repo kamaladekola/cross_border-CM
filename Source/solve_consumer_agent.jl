@@ -29,7 +29,7 @@ function solve_consumer_agent!(mod::Model, m::String, zones::Vector{String})
     g = mod.ext[:variables][:g]
     g_VOLL = mod.ext[:variables][:g_VOLL]
     g_ela = mod.ext[:variables][:g_ela]
-    # ens = mod.ext[:variables][:ens]
+    ens = mod.ext[:variables][:ens]
     cap_cm = mod.ext[:variables][:cap_cm]                                                                              # negative capacity offered in capacity markets
 
     # Create affine expressions
@@ -38,7 +38,7 @@ function solve_consumer_agent!(mod::Model, m::String, zones::Vector{String})
     neg_utility = mod.ext[:expressions][:utility] = @expression(mod,                                                                                           
     sum(W[jh] * ((λ_EOM[jh] - WTP)*g_positive[jh] + (WTP/(2*ela*D[jh]))*(g_ela[jh])^2) for jh in JH)
     + σ_CM * sum(λ_CM[jz] * cap_cm[jz] * PM[m][zones[jz]] for jz in JZ)
-    # + sum(W[jh] * WTP * ens[jh] for jh in JH)
+    # + sum(W[jh] * WTP * ens[jh] for jh in JH) # implementation in kaminski thesis includes penalty for unserved energy
     )
 
     # Objective => minimize negative utility (maximize utility)

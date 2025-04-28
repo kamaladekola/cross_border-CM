@@ -14,6 +14,8 @@ function define_common_parameters!(m::String,mod::Model, data::Dict, ts::DataFra
     mod.ext[:sets][:JH] = 1:data["General"]["nTimesteps"]
     mod.ext[:sets][:JZ] = 1:length(zones)
     mod.ext[:sets][:JL] = 1:data["Network"]["nLines"]
+    mod.ext[:sets][:JS] = 1:data["Network"]["nScenarios"]
+    mod.ext[:sets][:JB] = 1:length(zones)
   
     # Parameters related to the EOM
     mod.ext[:parameters][:λ_EOM] = zeros(data["General"]["nTimesteps"])     # Price structure

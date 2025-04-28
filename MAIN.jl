@@ -1,6 +1,4 @@
-## Topic: Go-E
-# Author: Kenneth Bruninx
-# Last update: November 2022
+
 
 ## 0. Set-up code
 # HPC or not?
@@ -78,7 +76,7 @@ wind_onshore = CSV.read(joinpath(home_dir,"Input","wind_onshore.csv"),delim=";",
 ptdf = CSV.read(joinpath(home_dir,"Input","ptdf.csv"),delim=";",DataFrame)
 participation_matrix = CSV.read(joinpath(home_dir,"Input","participation_matrix.csv"),delim=";",DataFrame)
 derating_factor = CSV.read(joinpath(home_dir,"Input","derating_factor.csv"),delim=";",DataFrame)
-np_max = CSV.read(joinpath(home_dir,"Input","np_max.csv"),delim=";",DataFrame)
+RAM_scen = CSV.read(joinpath(home_dir,"Input","RAM_scen.csv"),delim=";",DataFrame)
 
 # Overview scenarios
 scenario_overview = CSV.read(joinpath(home_dir,"overview_scenarios.csv"),DataFrame,delim=";")
@@ -234,7 +232,7 @@ end
 for m in agents[:CIC]
     CM_data = merge(data["General"], data["Network"]) # change to scarcity data
     define_common_parameters!(m, mdict[m], data, ts, agents, scenario_overview_row, zones, participation_matrix, derating_factor)  # Parameters common to all agents
-    define_capacityIC_parameters!(mdict[m], CM_data, zones, ptdf, np_max) # Capacity manager
+    define_capacityIC_parameters!(mdict[m], CM_data, zones, ptdf, RAM_scen) # Capacity manager
 end
 
 

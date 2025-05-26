@@ -11,6 +11,14 @@ function define_generator_parameters!(mod::Model, data::Dict,ts::DataFrame, af::
     mod.ext[:parameters][:σ_CM] = data["sigmaCM"]
 
 
+    # Nodal allocation
+    node_share = Dict{Symbol,Float64}()
+    for (node_str, share) in data["NodeShare"]
+        node_share[ Symbol(node_str) ] = share
+    end
+    
+    mod.ext[:parameters][:node_share] = node_share
+
    # Availability factors
     if haskey(data,"AF")
         mod.ext[:timeseries][:AF] = af[!,data["AF"]]

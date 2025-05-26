@@ -3,6 +3,7 @@ function build_consumer_agent!(mod::Model, m::String, zones::Vector{String})
     # Extract sets
     JH = mod.ext[:sets][:JH]
     JZ = mod.ext[:sets][:JZ]
+    JN = mod.ext[:sets][:JN]
 
     # Extract time series data
     D = mod.ext[:timeseries][:D] 
@@ -26,7 +27,11 @@ function build_consumer_agent!(mod::Model, m::String, zones::Vector{String})
     cap_bar = mod.ext[:parameters][:cap_bar]        # element in ADMM penalty term related to capacity markets
     PM = mod.ext[:parameters][:participation_matrix]
 
+    node_share = mod.ext[:parameters][:node_share]   # Dict(:n1=>0.6, :n2=>0.4)
+    nodes  = mod.ext[:parameters][:nodes]
+
     # Create variables
+    d_nodal = mod.ext[:variables][:d_nodal] = @variable(mod, [jh in JH, jn in JN], lower_bound=0, base_name="d_nodal")
     g = mod.ext[:variables][:g] = @variable(mod, [jh=JH], base_name="generation")                                       # consumption as negative generation
     g_VOLL = mod.ext[:variables][:g_VOLL] = @variable(mod, [jh=JH], lower_bound = 0, base_name="inelastic demand")      # inelastic demand
     g_ela = mod.ext[:variables][:g_ela] = @variable(mod, [jh=JH], lower_bound = 0, base_name="elastic demand")          # elastic demand
@@ -54,6 +59,13 @@ function build_consumer_agent!(mod::Model, m::String, zones::Vector{String})
     mod.ext[:constraints][:consumption] = @constraint(mod, [jh=JH], g[jh] == - g_positive[jh])                           # consumption as negative generation
     mod.ext[:constraints][:elastic_demand] = @constraint(mod, [jh=JH], g_ela[jh] <= ela * D[jh])                         # Elastic demand limit
     mod.ext[:constraints][:inelastic_demand] = @constraint(mod, [jh=JH], g_VOLL[jh] + ens[jh] == (1 - ela) * D[jh])      # Inelastic demand limit
+    
+    mod.ext[:constraints][:d_nodal] = @constraint(mod, [jh in JH, jn in JN],
+    d_nodal[jh,jn] == get(node_share, nodes[jn], 0.0) * g_positive[jh])
+
+    mod.ext[:constraints][:d_zonal_balance] = @constraint(mod, [jh in JH],
+    sum(d_nodal[jh, jn] for jn in JN) == g_positive[jh])
+
 
     for jz in JZ
         if zones[jz] == z

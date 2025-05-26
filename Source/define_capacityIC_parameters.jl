@@ -1,17 +1,35 @@
-function define_capacityIC_parameters!(mod::Model, data::Dict, zones::Vector{String}, ptdf::DataFrame, RAM_scen::DataFrame)
+function define_capacityIC_parameters!(mod::Model, data::Dict, zones::Vector{String}, ptdf::DataFrame, scarcity::DataFrame)
 
-    # Store parameters in model
-    
-    # mod.ext[:parameters][:lines] = ptdf[:, :line_id]
-    line_ids = ptdf[:, :line_id]
-    mod.ext[:parameters][:RAM] = ptdf[!, :RAM]
-    mod.ext[:parameters][:PTDF] =  Matrix(ptdf[!, zones])
-    # mod.ext[:parameters][:RAM_scenarios] = hcat([RAM_scen[:, Symbol(l)] for l in line_ids]...) |> Matrix
-    mod.ext[:parameters][:coupling] = data["coupling"]
-    mod.ext[:parameters][:MEC] = data["MEC"]
-    mod.ext[:parameters][:from_zone] = data["from_zone"]
-    mod.ext[:parameters][:to_zone] = data["to_zone"]
-    # mod.ext[:sets][:border_names] = ["AB", "BC", "CA"]
-    
+    mod.ext[:sets][:JS] = 1:nrow(scarcity)
+
+    node_syms = mod.ext[:parameters][:nodes]
+
+    node_shares = Dict{String,Dict{Symbol,Float64}}()
+    for zone in zones
+        cons_conf = get(data, zone, Dict{Any,Any}())
+        shares = Dict{Symbol,Float64}()
+        ns = get(cons_conf, "NodeShare", get(cons_conf, :NodeShare, Dict{Any,Any}()))
+        for (n_str, s) in ns
+            shares[Symbol(n_str)] = s
+        end
+        node_shares[zone] = shares
+    end
+
+    M = zeros(length(zones), length(node_syms))
+    for (jz, zone) in enumerate(zones)
+        for (jn, node) in enumerate(node_syms)
+            M[jz, jn] = get( node_shares[zone], node, 0.0 )
+        end
+    end
+
+    sc = copy(scarcity)
+    rename!(sc, names(sc)[1] => :scenario)
+    scarcity_zonal = select(sc, zones) |> Matrix
+    mod.ext[:parameters][:d_scarcity] = scarcity_zonal * M
+
+    # initialize the CM accumulators
+    # mod.ext[:parameters][:CapCM_zonal] = zeros(length(zones))
+    mod.ext[:parameters][:CapCM_nodal] = zeros(data["nNodes"])
+
     return mod
 end

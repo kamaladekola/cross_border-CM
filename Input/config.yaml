@@ -16,147 +16,82 @@ EOM:
   parameter_A: 1 # dummy, not used 
 
 
+
 Consumers: # consumers by zones
   A:
     WTP: 5000.0 # Value of lost load (€/MWh) # change the name to WTP
     D: "A" # Demand timeseries that needs to be picked up
     ela: 0.000001 # fraction of demand that is elastic
     sigmaCM: 0
+    NodeShare:
+        n1: 0.6
+        n2: 0.4
+
 
   B:
     WTP: 5000.0 # Value of lost load (€/MWh)
     D: "B" # Timeseries that needs to be picked up
     ela: 0.000001 # fraction of demand that is elastic
     sigmaCM: 0
+    NodeShare:
+        n3: 1.0
 
   C:
     WTP: 5000.0 # Value of lost load (€/MWh)
     D: "C" # Timeseries that needs to be picked up
     ela: 0.000001 # fraction of demand that is elastic
-    sigmaCM: 1
+    sigmaCM: 0
+    NodeShare:
+        n4: 1.0
 
 Generators: 
   # OPEX are parametrized as a/2 x g^2 + b x g
   A: 
     Baseload:
       a: 0.008 # (€/MWh)^2
-      b: 36 # €/MWh
+      b: 38 # €/MWh
       C: 0 # MW - existing capacity (set to zero if greenfield)
-      I: 180000.1 # €/MW-year - annualized investment cost (convert to €/MW-year?)
+      I: 170000 # €/MW-year - annualized investment cost (convert to €/MW-year?)
       max_cap: 50000 # MW - maximum capacity
       sigmaCM: 1
+      NodeShare:
+          n1: 0.6
+          n2: 0.4
+
 
     MidMerit:
       a: 0.032 # (€/MWh)^2
-      b: 53 # €/MWh
+      b: 55 # €/MWh
       C: 0 # MW - existing capacity (set to zero if greenfield)
-      I: 100000.1 # €/MW-year - annualized investment cost
+      I: 90000 # €/MW-year - annualized investment cost
       max_cap: 50000 # MW - maximum capacity
       sigmaCM: 1
+      NodeShare:
+          n1: 0.6
+          n2: 0.4
 
     Peak:
       a: 0.08 # (€/MWh)^2
-      b: 76 # €/MWh
+      b: 78 # €/MWh
       C: 0 # MW - existing capacity (set to zero if greenfield)
-      I: 70000.1 # €/MW-year - annualized investment cost
+      I: 60000 # €/MW-year - annualized investment cost
       max_cap: 100000 # MW - maximum capacity
       sigmaCM: 1
+      NodeShare:
+          n1: 0.6
+          n2: 0.4
 
-    WindOnshore:
-      a: 0 # (€/MWh)^2
-      b: 0 # €/MWh
-      C: 11706 # MW
-      I: 300000 # €/MW-day - annualized investment cost
-      max_cap: 11706 # MW - maximum capacity
-      AF: "A"
-      sigmaCM: 0
-
-    PV:
-      a: 0 # (€/MWh)^2
-      b: 0 # €/MWh
-      C: 27259 # MW
-      I: 300000 # €/MW-year - annualized investment cost
-      max_cap: 27259 # MW - maximum capacity
-      AF: "A"
-      sigmaCM: 0
-
-  B:
-    Baseload:
-      a: 0.008 # (€/MWh)^2
-      b: 36 # €/MWh
-      C: 0 # MW - existing capacity (set to zero if greenfield)
-      I: 180000.05 # €/MW-year - annualized investment cost (convert to €/MW-year?)
-      max_cap: 50000 # MW - maximum capacity
-      sigmaCM: 1
-
-    MidMerit:
-      a: 0.032 # (€/MWh)^2
-      b: 53 # €/MWh
-      C: 0 # MW - existing capacity (set to zero if greenfield)
-      I: 100000.05 # €/MW-year - annualized investment cost
-      max_cap: 50000 # MW - maximum capacity
-      sigmaCM: 1
-
-    Peak:
-      a: 0.08 # (€/MWh)^2
-      b: 76 # €/MWh
-      C: 0 # MW - existing capacity (set to zero if greenfield)
-      I: 70000.05 # €/MW-year - annualized investment cost
-      max_cap: 100000 # MW - maximum capacity
-      sigmaCM: 1
-
-    WindOnshore:
-      a: 0 # (€/MWh)^2
-      b: 0 # €/MWh
-      C: 5439 # MW
-      I: 300000 # €/MW-day - annualized investment cost
-      max_cap: 5439 # MW - maximum capacity
-      AF: "B"
-      sigmaCM: 0
-
-    PV:
-      a: 0 # (€/MWh)^2
-      b: 0 # €/MWh
-      C: 10794 # MW
-      I: 300000 # k€/MW-year - annualized investment cost
-      max_cap: 10794 # MW - maximum capacity
-      AF: "B"
-      sigmaCM: 0
-
-  C: 
-    Baseload:
-      a: 0.008 # (€/MWh)^2
-      b: 36 # €/MWh
-      C: 0 # MW - existing capacity (set to zero if greenfield)
-      I: 180000 # €/MW-year - annualized investment cost (convert to €/MW-year?)
-      max_cap: 50000 # MW - maximum capacity
-      sigmaCM: 1
-
-    MidMerit:
-      a: 0.032 # (€/MWh)^2
-      b: 53 # €/MWh
-      C: 0 # MW - existing capacity (set to zero if greenfield)
-      I: 100000 # €/MW-year - annualized investment cost
-      max_cap: 50000 # MW - maximum capacity
-      sigmaCM: 1
-
-    Peak:
-      a: 0.08 # (€/MWh)^2
-      b: 76 # €/MWh
-      C: 0 # MW - existing capacity (set to zero if greenfield)
-      I: 70000 # €/MW-year - annualized investment cost
-      max_cap: 100000 # MW - maximum capacity
-      sigmaCM: 1
-      
     WindOnshore:
       a: 0 # (€/MWh)^2
       b: 0 # €/MWh
       C: 72618 # MW
-      I: 300000 # €/MW-day - annualized investment cost
+      I: 300000 # €/MW-year - annualized investment cost
       max_cap: 72618 # MW - maximum capacity
       AF: "C"
       sigmaCM: 0
-
+      NodeShare:
+          n1: 0.6
+          n2: 0.4
     PV:
       a: 0 # (€/MWh)^2
       b: 0 # €/MWh
@@ -165,6 +100,115 @@ Generators:
       max_cap: 86952 # MW - maximum capacity
       AF: "C"
       sigmaCM: 0
+      NodeShare:
+          n1: 0.6
+          n2: 0.4
+  B:
+    Baseload:
+      a: 0.008 # (€/MWh)^2
+      b: 36 # €/MWh
+      C: 0 # MW - existing capacity (set to zero if greenfield)
+      I: 180000 # €/MW-year - annualized investment cost (convert to €/MW-year?)
+      max_cap: 50000 # MW - maximum capacity
+      sigmaCM: 1
+      NodeShare:
+          n3: 1.0
+
+    MidMerit:
+      a: 0.032 # (€/MWh)^2
+      b: 53 # €/MWh
+      C: 0 # MW - existing capacity (set to zero if greenfield)
+      I: 100000 # €/MW-year - annualized investment cost
+      max_cap: 50000 # MW - maximum capacity
+      sigmaCM: 1
+      NodeShare:
+          n3: 1.0
+
+    Peak:
+      a: 0.08 # (€/MWh)^2
+      b: 76 # €/MWh
+      C: 0 # MW - existing capacity (set to zero if greenfield)
+      I: 70000 # €/MW-year - annualized investment cost
+      max_cap: 100000 # MW - maximum capacity
+      sigmaCM: 1
+      NodeShare:
+          n3: 1.0
+
+    WindOnshore:
+      a: 0 # (€/MWh)^2
+      b: 0 # €/MWh
+      C: 5439 # MW
+      I: 300000 # €/MW-year - annualized investment cost
+      max_cap: 5439 # MW - maximum capacity
+      AF: "B"
+      sigmaCM: 0
+      NodeShare:
+          n3: 1.0
+
+    PV:
+      a: 0 # (€/MWh)^2
+      b: 0 # €/MWh
+      C: 10794 # MW
+      I: 300000 # €/MW-year - annualized investment cost
+      max_cap: 10794 # MW - maximum capacity
+      AF: "B"
+      sigmaCM: 0
+      NodeShare:
+          n3: 1.0
+
+  C: 
+    Baseload:
+      a: 0.008 # (€/MWh)^2
+      b: 34 # €/MWh
+      C: 0 # MW - existing capacity (set to zero if greenfield)
+      I: 190000 # €/MW-year - annualized investment cost (convert to €/MW-year?)
+      max_cap: 50000 # MW - maximum capacity
+      sigmaCM: 1
+      NodeShare:
+          n4: 1.0
+
+    MidMerit:
+      a: 0.032 # (€/MWh)^2
+      b: 51 # €/MWh
+      C: 0 # MW - existing capacity (set to zero if greenfield)
+      I: 90000 # €/MW-year - annualized investment cost
+      max_cap: 50000 # MW - maximum capacity
+      sigmaCM: 1
+      NodeShare:
+          n4: 1.0
+
+    Peak:
+      a: 0.08 # (€/MWh)^2
+      b: 74 # €/MWh
+      C: 0 # MW - existing capacity (set to zero if greenfield)
+      I: 60000 # €/MW-year - annualized investment cost
+      max_cap: 100000 # MW - maximum capacity
+      sigmaCM: 1
+      NodeShare:
+          n4: 1.0
+
+    WindOnshore:
+      a: 0 # (€/MWh)^2
+      b: 0 # €/MWh
+      C: 11706 # MW
+      I: 300000.2 # €/MW-year - annualized investment cost
+      max_cap: 11706 # MW - maximum capacity
+      AF: "A"
+      sigmaCM: 0
+      NodeShare:
+          n4: 1.0
+
+    PV:
+      a: 0 # (€/MWh)^2
+      b: 0 # €/MWh
+      C: 27259 # MW
+      I: 300000.2 # €/MW-year - annualized investment cost
+      max_cap: 27259 # MW - maximum capacity
+      AF: "A"
+      sigmaCM: 0
+      NodeShare:
+          n4: 1.0
+
 CM:
   A:
     capacity_target: 20000.0   # MW (capacity demand for zone A)
@@ -172,39 +216,40 @@ CM:
     capacity_margin: 0.10     # 10% capacity margin
     min_price: -1000000
     max_price: 1000000
+    D: "A" #
   B:
     capacity_target: 20000.0
     price_target: 180000.0
     capacity_margin: 0.10
     min_price: -1000000
     max_price: 1000000
+    D: "B"
   C:
     capacity_target: 40000.0
     price_target: 180000.0
     capacity_margin: 0.10
     min_price: -1000000
     max_price: 1000000
-
+    D: "C"
 
 Network:
+  ZoneMap:
+    A: [n1, n2]
+    B: [n3]
+    C: [n4]
+    
+  TCONNECT:
+    - [A, C]
+    - [C, B]
+    - [B, A]
+
   nLines: 4
   nScenarios: 4
+  lines: "lines"  # lines dataframe
   ptdf: "ptdf"  # PTDF dataframe
+  nodal_ptdf: "nodal_ptdf"  # nodal PTDF dataframe
   np_max: "np_max"
   coupling: "FB"  # or "FB" or "ATC"
+  MEC: {[A, C]: 3000, [C, B]: 3000, [B, A]: 3000} # replace with get_atc
 
-  MEC:
-    AB: 3000
-    BC: 3000
-    CA: 3000
-
-  from_zone:
-    AB: A
-    BC: B
-    CA: C
-
-  to_zone:
-    AB: B
-    BC: C
-    CA: A
 

@@ -19,7 +19,7 @@ if HPC == "ThinKing"  # only for running this on VSC
 end
 
 ######### Add packages #########
-import Pkg
+# import Pkg
 # Pkg.add("DataStructures")
 # Pkg.add("ProgressBars")
 # Pkg.add("TimerOutputs")
@@ -74,9 +74,12 @@ pv = CSV.read(joinpath(home_dir,"Input","pv.csv"),delim=";",DataFrame)
 wind_offshore = CSV.read(joinpath(home_dir,"Input","wind_offshore.csv"),delim=";",DataFrame)
 wind_onshore = CSV.read(joinpath(home_dir,"Input","wind_onshore.csv"),delim=";",DataFrame)
 ptdf = CSV.read(joinpath(home_dir,"Input","ptdf.csv"),delim=";",DataFrame)
+nodal_ptdf = CSV.read(joinpath(home_dir,"Input","nodal_ptdf.csv"),delim=";",DataFrame)
+lines = CSV.read(joinpath(home_dir,"Input","lines.csv"),delim=";",DataFrame)
 participation_matrix = CSV.read(joinpath(home_dir,"Input","participation_matrix.csv"),delim=";",DataFrame)
 derating_factor = CSV.read(joinpath(home_dir,"Input","derating_factor.csv"),delim=";",DataFrame)
-RAM_scen = CSV.read(joinpath(home_dir,"Input","RAM_scen.csv"),delim=";",DataFrame)
+scarcity = CSV.read(joinpath(home_dir,"Input","scarcity.csv"),delim=";",DataFrame)
+const TCONNECT = [(:A,:C), (:C,:B), (:B,:A)]
 
 # Overview scenarios
 scenario_overview = CSV.read(joinpath(home_dir,"overview_scenarios.csv"),DataFrame,delim=";")
@@ -156,7 +159,7 @@ println("   ")
 ## 2. Initiate models for representative agents
 
 # Create an ordered list of zones to ensure consistent ordering throughout the code
-zones = sort(string.(collect(keys(data["Consumers"]))))
+zones = sort(string.(collect(keys(data["Consumers"])))) # zones = ["A","B","C"]
 
 # Parameters/variables EOM
 EOM = Dict()
@@ -200,14 +203,13 @@ for m in agents[:Cons]
     zone, _ = parse_agent_name(m)
     cons_data = merge(data["General"], data["Consumers"][zone], data["CM"][zone])
 
-    define_common_parameters!(m, mdict[m], data, ts, agents, scenario_overview_row, zones, participation_matrix, derating_factor) # Parameters common to all agents
+    define_common_parameters!(m, mdict[m], data, ts, agents, scenario_overview_row, zones, ptdf, nodal_ptdf, lines, participation_matrix, derating_factor) # Parameters common to all agents
     define_consumer_parameters!(mdict[m], cons_data, load)                            # Consumers
 end
 
 # Generator models
 for m in agents[:Gen]
     zone, tech = parse_agent_name(m)
-    gen_data = merge(data["General"], data["Generators"][zone][tech])
     if tech == "WindOnshore"
         af = wind_onshore
     elseif tech == "PV"
@@ -217,24 +219,25 @@ for m in agents[:Gen]
         B = ones(data["General"]["nTimesteps"]), 
         C = ones(data["General"]["nTimesteps"]))
     end
-    define_common_parameters!(m, mdict[m], data, ts, agents, scenario_overview_row, zones, participation_matrix, derating_factor) # Parameters common to all agents
+    gen_data = merge(data["General"], data["Generators"][zone][tech])
+    define_common_parameters!(m, mdict[m], data, ts, agents, scenario_overview_row, zones, ptdf, nodal_ptdf, lines, participation_matrix, derating_factor) # Parameters common to all agents
     define_generator_parameters!(mdict[m], gen_data, ts, af)                            # Generators
 end
 
 # Interconnector models
 for m in agents[:IC]
-    IC_data = merge(data["General"], data["Network"])
-    define_common_parameters!(m, mdict[m], data, ts, agents, scenario_overview_row, zones, participation_matrix, derating_factor) # Parameters common to all agents
-    define_interconnector_parameters!(mdict[m], IC_data, zones, ptdf)                 # Interconnectors
+    IC_data = merge(data["General"], data["Network"], data["Consumers"])
+    define_common_parameters!(m, mdict[m], data, ts, agents, scenario_overview_row, zones, ptdf, nodal_ptdf, lines, participation_matrix, derating_factor) # Parameters common to all agents
+    define_interconnector_parameters!(mdict[m], IC_data, zones, ptdf, nodal_ptdf, lines)                # Interconnectors
+    # define_getATC_parameters!(mdict[m]) # ATC parameters
 end
 
 # Capacity manager models
 for m in agents[:CIC]
-    CM_data = merge(data["General"], data["Network"]) # change to scarcity data
-    define_common_parameters!(m, mdict[m], data, ts, agents, scenario_overview_row, zones, participation_matrix, derating_factor)  # Parameters common to all agents
-    define_capacityIC_parameters!(mdict[m], CM_data, zones, ptdf, RAM_scen) # Capacity manager
+    CM_data = merge(data["General"], data["Network"], data["Consumers"]) # change to scarcity data
+    define_common_parameters!(m, mdict[m], data, ts, agents, scenario_overview_row, zones, ptdf, nodal_ptdf, lines, participation_matrix, derating_factor) # Parameters common to all agents
+    define_capacityIC_parameters!(mdict[m], CM_data, zones, ptdf, scarcity) # Capacity manager
 end
-
 
 ## 3. Define parameters for markets and representative agents
 
@@ -246,8 +249,6 @@ EOM["nAgents_z"] = Dict(z => length(agents[:eom_Z][z]) for z in zones)
 CM["nAgents"] = length(agents[:cm])
 CM["nAgents_z"] = Dict(z => length(agents[:cm_Z][z]) for z in zones)
 # println("Number of agents per zone: ", EOM["nAgents_z"])
-
-
 
 
 println("Inititate model, sets and parameters: done")
@@ -262,6 +263,7 @@ for m in agents[:Gen]
 end
 for m in agents[:IC]
     build_interconnector_agent!(mdict[m])
+    # build_getATC_agent!(mdict[m])
 end
 for m in agents[:CIC]
     build_capacityIC_agent!(mdict[m])

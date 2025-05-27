@@ -20,11 +20,11 @@ function solve_capacityIC_agent!(mod::Model)
     g_scarcity  = mod.ext[:variables][:g_scarcity]
     ens_cm      = mod.ext[:variables][:ens_cm]
     
+    # demand = mod.ext[:expressions][:demand] = @expression(mod, [js in JS, jn in JN],
+    #         d_scarcity[js, zone_of_idx[jn]] * sum(CapCM_nodal[n] for n in JN))
+
     demand = mod.ext[:expressions][:demand] = @expression(mod, [js in JS, jn in JN],
-        d_scarcity[js, zone_of_idx[jn]] * CapCM_nodal[jn]
-    )
-
-
+            d_scarcity[js, zone_of_idx[jn]] * CapCM_nodal[jn])
     # Objective
     mod.ext[:objective] = @objective(mod, Min,
         - sum(λ_CM[jz] * cap_cm[jz] for jz in JZ)
@@ -41,15 +41,15 @@ function solve_capacityIC_agent!(mod::Model)
     )
 
 
-    # zonal balance
-    for js in JS, jz in JZ
-        delete(mod, mod.ext[:constraints][:zonal_balance][js, jz])
-    end
-    mod.ext[:constraints][:zonal_balance] = @constraint(mod, [js in JS, jz in JZ],
-        sum(g_scarcity[js, jn] for jn in JN if zone_of_idx[jn] == jz)
-        + sum(ens_cm[js, jn] for jn in JN if zone_of_idx[jn] == jz) + cap_cm[jz]
-        == sum(demand[js, jn] for jn in JN if zone_of_idx[jn] == jz)
-    )
+    # # zonal balance
+    # for js in JS, jz in JZ
+    #     delete(mod, mod.ext[:constraints][:zonal_balance][js, jz])
+    # end
+    # mod.ext[:constraints][:zonal_balance] = @constraint(mod, [js in JS, jz in JZ],
+    #     sum(g_scarcity[js, jn] for jn in JN if zone_of_idx[jn] == jz)
+    #     + sum(ens_cm[js, jn] for jn in JN if zone_of_idx[jn] == jz) + cap_cm[jz]
+    #     == sum(demand[js, jn] for jn in JN if zone_of_idx[jn] == jz)
+    # )
 
 
     if coupling == "FB"
@@ -60,6 +60,11 @@ function solve_capacityIC_agent!(mod::Model)
             flow_cm[js, jl] == sum(nodal_PTDF[jl, jn] * (g_scarcity[js, jn] - demand[js, jn] + ens_cm[js, jn]) for jn in JN)
         )
 
+        for js in JS
+            delete(mod, mod.ext[:constraints][:cap_cm_global_balance][js])
+        end
+        mod.ext[:constraints][:cap_cm_global_balance] = @constraint(mod, [js in JS],
+            0 == sum((g_scarcity[js,jn] - demand[js,jn] + ens_cm[js,jn]) for jn in JN))
     elseif coupling == "ATC"
         # ATC = get_ATC()
     end

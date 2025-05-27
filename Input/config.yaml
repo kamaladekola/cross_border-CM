@@ -8,7 +8,7 @@ General:
 ADMM:
   rho_EOM: 1 # rho ADMM penalty term, EOM
   rho_CM: 1 # rho ADMM penalty term, CM
-  max_iter: 1500
+  max_iter: 2000
   epsilon: 0.1 # stopping criterion - tolerance on "accuracy" with which the coupling constraints are satisfied. Applied to dual and primal residuals.
   CircularBufferSize: 5 # number of iterations for which data will be retained, should be at least 2 and less than max_iter
 
@@ -24,8 +24,8 @@ Consumers: # consumers by zones
     ela: 0.000001 # fraction of demand that is elastic
     sigmaCM: 1
     NodeShare:
-        n1: 0.6
-        n2: 0.4
+        n1: 0.4
+        n2: 0.6
 
 
   B:

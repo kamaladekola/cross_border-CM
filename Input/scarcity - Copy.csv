@@ -1,8 +1,0 @@
-;A;B;C
-simultaneous_peak;1;1;1
-scarcity_A;1.2;0.8;0.8
-scarcity_B;0.8;1.2;0.8
-scarcity_C;0.8;0.8;1.2
-peak_AB;1;1;0.8
-peak_AC;1;0.8;1
-peak_BC;0.8;1;1

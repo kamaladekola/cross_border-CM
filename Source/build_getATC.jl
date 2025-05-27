@@ -11,8 +11,8 @@ function build_getATC!(mod::Model, hour=20)
     TCONNECT   = mod.ext[:parameters][:TCONNECT]
     signs      = mod.ext[:parameters][:signs]
     nodes      = mod.ext[:parameters][:nodes]
-    D_nodal    = mod.ext[:parameters][:D_nodal] # extract single hour data
-    Y_nodal    = mod.ext[:parameters][:Y_nodal] # extract single hour data
+    D_nodal    = mod.ext[:parameters][:D_nodal] # use demand at scarcity scenarios - d_scarcity
+    CapCM_nodal = mod.ext[:parameters][:CapCM_nodal]
     zone_idx_of = mod.ext[:parameters][:zone_idx_of]
     nodal_PTDF = mod.ext[:parameters][:nodal_PTDF]
     zone_of    = mod.ext[:parameters][:zone_of]
@@ -20,7 +20,7 @@ function build_getATC!(mod::Model, hour=20)
     zone_syms  = mod.ext[:parameters][:zone_syms]
 
     # ATC variables - two for  each interconnector
-
+    # solve and obtain atc for each scenario
     atc_plus = mod.ext[:variables][:atc_plus] = @variable(m, atc_plus[t in TCONNECT], base_name = "atc_plus")
     atc_minus = mod.ext[:variables][:atc_minus] = @variable(m, atc_minus[t in TCONNECT], base_name = "atc_minus")
 
@@ -31,6 +31,12 @@ function build_getATC!(mod::Model, hour=20)
     net_pos = mod.ext[:variables][:net_pos] = @variable(m, net_pos[jv in JV, jz in JZ] >= 0, base_name = "net_pos")
     e = mod.ext[:variables][:e] = @variable(m, e[jv in JV, t in TCONNECT] >= 0, base_name = "e")
     
+    ###########################################################################################################
+    demand = mod.ext[:expressions][:demand] = @expression(mod, [js in JS, jn in JN],
+            d_scarcity[js, zone_of_idx[jn]] * CapCM_nodal[jn]) 
+            
+    # to do: define nodal demand as a fraction of total system capacity
+    ###########################################################################################################
 
     # Objective
     @objective(m, Max, sum(atc_plus[t] + atc_minus[t] for t in TCONNECT))

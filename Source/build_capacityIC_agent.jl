@@ -43,6 +43,9 @@ function build_capacityIC_agent!(mod::Model)
     demand = mod.ext[:expressions][:demand] = @expression(mod, [js in JS, jn in JN],
             d_scarcity[js, zone_of_idx[jn]] * CapCM_nodal[jn])
 
+    # demand = mod.ext[:expressions][:demand] = @expression(mod, [js in JS, jn in JN],
+    #         d_scarcity[js, zone_of_idx[jn]] * sum(CapCM_nodal[n] for n in JN))
+
     mod.ext[:constraints][:CapacityNP] = @constraint(mod, sum(cap_cm[jz] for jz in JZ) == 0) # capacity netposition
 
     # dispatch scenarios
@@ -68,10 +71,10 @@ function build_capacityIC_agent!(mod::Model)
           - sum(ex_cm[js,t] for t in TCONNECT if t[1] == zone_syms[jz])
           )
 
-    mod.ext[:constraints][:zonal_balance] = @constraint(mod, [js in JS, jz in JZ],
-        sum(g_scarcity[js,jn] for jn in JN if zone_of_idx[jn] == jz)
-        + sum(ens_cm[js,jn] for jn in JN if zone_of_idx[jn] == jz)
-        + cap_cm[jz] == sum(demand[js,jn] for jn in JN if zone_of_idx[jn] == jz))
+    # mod.ext[:constraints][:zonal_balance] = @constraint(mod, [js in JS, jz in JZ],
+    #     sum(g_scarcity[js,jn] for jn in JN if zone_of_idx[jn] == jz)
+    #     + sum(ens_cm[js,jn] for jn in JN if zone_of_idx[jn] == jz)
+    #     + cap_cm[jz] == sum(demand[js,jn] for jn in JN if zone_of_idx[jn] == jz))
 
 
     if coupling == "FB"
@@ -79,11 +82,13 @@ function build_capacityIC_agent!(mod::Model)
         mod.ext[:constraints][:cap_cm_nodal_balance] = @constraint(mod, [js in JS, jl in JL],
             flow_cm[js,jl] == sum(nodal_PTDF[jl, jn] * (g_scarcity[js,jn] - demand[js,jn] + ens_cm[js,jn]) for jn in JN))
 
+        mod.ext[:constraints][:cap_cm_global_balance] = @constraint(mod, [js in JS],
+            0 == sum((g_scarcity[js,jn] - demand[js,jn] + ens_cm[js,jn]) for jn in JN))
 
     elseif coupling == "ATC"     # each border is independently constrained by ATC 
        ATC = mod.ext[:parameters][:ATC]    # Dict(A,B) 
-       mod.ext[:constraints][:cap_cm_atc_limit] =  @constraint(mod, [s in JS, t in TCONNECT],
-        -ATC[t] <= ex_cm[s,t] <= ATC[t])
+       mod.ext[:constraints][:cap_cm_atc_limit] =  @constraint(mod, [js in JS, t in TCONNECT],
+        -ATC[s,t] <= ex_cm[js,t] <= ATC[t])
     end
 
     return mod

@@ -53,7 +53,6 @@ function build_generator_agent!(mod::Model, m::String, zones::Vector{String})
         + sum(W[jh] * ρ_EOM/2*(g[jh] - g_bar[jh])^2 for jh in JH)     # ADMM penalty term for EOM clearing with weights
         # + σ_CM * sum(ρ_CM[jz]/2 * PM[m][zones[jz]] * (cap_cm[jz] - cap_bar[jz])^2 for jz in JZ) # ADMM penalty term for capacity markets
         + σ_CM * ρ_CM[home_zone]/2 * (sum(cap_cm[jz] * PM[m][zones[jz]] for jz in JZ) - cap_bar[home_zone])^2 # ADMM penalty term for CM when all capacity in a zone is remunerated at the same price
-
     )
 
     # # aggregate nodal to zone level

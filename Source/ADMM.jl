@@ -15,8 +15,10 @@ function ADMM!(results::Dict,ADMM::Dict,EOM::Dict,CM::Dict,mdict::Dict,agents::D
             @timeit TO "Compute zonal imbalances" begin
                 for (zone_idx, z) in enumerate(zones)
                     push!(ADMM["Imbalances"]["EOM"][z],  sum(results["g"][m][end] for m in agents[:eom_Z][z]) + results["g"]["NetworkManager"][end][:, zone_idx])
-                    # Total generation capacity from generators in zone z (offered anywhere) - Capacity demand in zone z + capacity manager net position in zone Z
-                    push!(ADMM["Imbalances"]["CM"][z], sum(sum(results["cap_cm"][m][end]) for m in agents[:cm_Z][z] if m in agents[:Gen]) - sum(results["cap_cm"][m][end][zone_idx] for m in agents[:cm_Z][z] if m in agents[:Cons]) + results["cap_cm"]["CapacityManager"][end][zone_idx])
+                    ## Total generation capacity from generators in zone z (offered anywhere) - Capacity demand in zone z + capacity manager net position in zone Z
+                    # push!(ADMM["Imbalances"]["CM"][z], sum(sum(results["cap_cm"][m][end]) for m in agents[:cm_Z][z] if m in agents[:Gen]) - sum(results["cap_cm"][m][end][zone_idx] for m in agents[:cm_Z][z] if m in agents[:Cons]) + results["cap_cm"]["CapacityManager"][end][zone_idx])
+
+                   push!(ADMM["Imbalances"]["CM"][z], sum(results["cap_cm"][m][end][zone_idx]  for m in agents[:cm_Z][z] if m in agents[:Gen]) - sum(results["cap_cm"][m][end][zone_idx] for m in agents[:cm_Z][z] if m in agents[:Cons]) + results["cap_cm"]["CapacityManager"][end][zone_idx])                    
                 end                                
             end
 
@@ -50,10 +52,10 @@ function ADMM!(results::Dict,ADMM::Dict,EOM::Dict,CM::Dict,mdict::Dict,agents::D
             # Update prices for each zone #  ρ damper - 20 EOM; 10 CM
             @timeit TO "Update prices" begin
                 for z in zones
-                    push!(results["λ"]["EOM"][z], results["λ"]["EOM"][z][end] - ADMM["ρ"]["EOM"][z][end]/20*ADMM["Imbalances"]["EOM"][z][end])
+                    push!(results["λ"]["EOM"][z], results["λ"]["EOM"][z][end] - ADMM["ρ"]["EOM"][z][end]/10*ADMM["Imbalances"]["EOM"][z][end])
                     # push!(results["λ"]["CM"][z], results["λ"]["CM"][z][end] - ADMM["ρ"]["CM"][z][end]/100*ADMM["Imbalances"]["CM"][z][end])
                     # limit price update to investment cost of most expensive plant and no negative prices
-                    λ_CM_new = results["λ"]["CM"][z][end] - ADMM["ρ"]["CM"][z][end]/100*ADMM["Imbalances"]["CM"][z][end]
+                    λ_CM_new = results["λ"]["CM"][z][end] - ADMM["ρ"]["CM"][z][end]/20*ADMM["Imbalances"]["CM"][z][end]
                     λ_CM_new = max(λ_CM_new, data["CM"][z]["min_price"])
                     λ_CM_new = min(λ_CM_new, data["CM"][z]["max_price"])
                     push!(results["λ"]["CM"][z], λ_CM_new)

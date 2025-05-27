@@ -70,12 +70,14 @@ function build_interconnector_agent!(mod::Model)
 
     # generation + redispatch <= installed capacity (Y_nodal) * availability factor -> this matters especially for renewables
     # redispatch constraints
-    # mod.ext[:constraints][:redispatch_limit] = @constraint(mod, [jh in JH, jn in JN], 
-    # 0 <= G_nodal[jh,jn] + g_red[jh,jn] + ens_IC[jh,jn] <= Y_nodal[jh,jn]) 
+    mod.ext[:constraints][:redispatch_limit] = @constraint(mod, [jh in JH, jn in JN], 
+    0 <= G_nodal[jh,jn] + g_red[jh,jn] + ens_IC[jh,jn] <= Y_nodal[jh,jn]) 
+
+    mod.ext[:constraints][:redispatch_balance] = @constraint(mod, [jh in JH, jz in JZ],
+      sum(g_red[jh, jn] + ens_IC[jh,jn] for jn in JN if zone_of_idx[jn] == jz) == 0)
 
     # mod.ext[:constraints][:redispatch_balance] = @constraint(mod, [jh in JH, jz in JZ],
-    #   sum(g_red[jh, jn] for jn in JN if zone_of_idx[jn] == jz) == 0)
-
+    #   -1 <= sum(g_red[jh, jn] + ens_IC[jh,jn] for jn in JN if zone_of_idx[jn] == jz) <= 1)
     # bound on redispatch not needed since it is already bounded by the capacity limit constraint
 
 

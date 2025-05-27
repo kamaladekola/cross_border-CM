@@ -27,7 +27,7 @@ function solve_interconnector_agent!(mod::Model)
     mod.ext[:objective] = @objective(mod, Min, 
     - sum(W[jh] * λ_all[jh,jz] * g[jh,jz] for jh in JH, jz in JZ)
     + sum(W[jh] * (ρ_all[jz]/2) * (g[jh,jz] - g_bar_all[jh,jz])^2 for jh in JH, jz in JZ)
-    + sum(W[jh] * ((ens_IC[jh,jn])^2 * 1e10) for jh in JH, jn in JN)
+    + sum(W[jh] * ((ens_IC[jh,jn])^2 * 1e5) for jh in JH, jn in JN)
     )
 
 
@@ -39,11 +39,11 @@ function solve_interconnector_agent!(mod::Model)
 
 
         
-    # for jh in JH, jn in JN
-    #     delete(mod, mod.ext[:constraints][:redispatch_limit][jh,jn])
-    # end
-    # mod.ext[:constraints][:redispatch_limit] = @constraint(mod, [jh in JH, jn in JN], 
-    # 0 <= G_nodal[jh,jn] + g_red[jh,jn] + ens_IC[jh,jn] <= Y_nodal[jh,jn])
+    for jh in JH, jn in JN
+        delete(mod, mod.ext[:constraints][:redispatch_limit][jh,jn])
+    end
+    mod.ext[:constraints][:redispatch_limit] = @constraint(mod, [jh in JH, jn in JN], 
+    0 <= G_nodal[jh,jn] + g_red[jh,jn] + ens_IC[jh,jn] <= Y_nodal[jh,jn])
 
     optimize!(mod);
 

@@ -78,8 +78,7 @@ function build_generator_agent!(mod::Model, m::String, zones::Vector{String})
 
 
     
-    # mod.ext[:constraints][:capcm_limit] = @constraint(mod, [jn in JN], cap_cm_nodal[jn] == cap_cm[zone_of_idx[jn]]  * get(node_share, nodes[jn], 0.0))
-    mod.ext[:constraints][:capcm_limit] = @constraint(mod, [jz in JZ], cap_cm[jz] == sum(cap_cm_nodal[jn] for jn in JN if zone_of_idx[jn] == jz))
+    mod.ext[:constraints][:capcm_share] = @constraint(mod, [jn in JN], cap_cm_nodal[jn] == cap_cm[zone_of_idx[jn]]  * get(node_share, nodes[jn], 0.0))
 
     return mod
 

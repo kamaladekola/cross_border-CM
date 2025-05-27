@@ -22,7 +22,7 @@ Consumers: # consumers by zones
     WTP: 5000.0 # Value of lost load (€/MWh) # change the name to WTP
     D: "A" # Demand timeseries that needs to be picked up
     ela: 0.000001 # fraction of demand that is elastic
-    sigmaCM: 0
+    sigmaCM: 1
     NodeShare:
         n1: 0.6
         n2: 0.4
@@ -32,7 +32,7 @@ Consumers: # consumers by zones
     WTP: 5000.0 # Value of lost load (€/MWh)
     D: "B" # Timeseries that needs to be picked up
     ela: 0.000001 # fraction of demand that is elastic
-    sigmaCM: 0
+    sigmaCM: 1
     NodeShare:
         n3: 1.0
 
@@ -40,7 +40,7 @@ Consumers: # consumers by zones
     WTP: 5000.0 # Value of lost load (€/MWh)
     D: "C" # Timeseries that needs to be picked up
     ela: 0.000001 # fraction of demand that is elastic
-    sigmaCM: 0
+    sigmaCM: 1
     NodeShare:
         n4: 1.0
 
@@ -171,7 +171,7 @@ Generators:
       a: 0.032 # (€/MWh)^2
       b: 51 # €/MWh
       C: 0 # MW - existing capacity (set to zero if greenfield)
-      I: 90000 # €/MW-year - annualized investment cost
+      I: 110000 # €/MW-year - annualized investment cost
       max_cap: 50000 # MW - maximum capacity
       sigmaCM: 1
       NodeShare:
@@ -181,7 +181,7 @@ Generators:
       a: 0.08 # (€/MWh)^2
       b: 74 # €/MWh
       C: 0 # MW - existing capacity (set to zero if greenfield)
-      I: 60000 # €/MW-year - annualized investment cost
+      I: 80000 # €/MW-year - annualized investment cost
       max_cap: 100000 # MW - maximum capacity
       sigmaCM: 1
       NodeShare:

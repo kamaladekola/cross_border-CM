@@ -39,14 +39,6 @@ function ADMM_subroutine!(m::String, results::Dict, ADMM::Dict, EOM::Dict, CM::D
             end
         end
 
-        # @timeit TO_local "Get ATC" begin
-        #     _, ATC = solve_getATC!(mod)
-        #     status = JuMP.termination_status(mod)
-        #     if status != MOI.OPTIMAL
-        #         error("ADMM_subroutine!($m) did not solve to optimality.  status = $status")
-        #     end
-        #     mod.ext[:parameters][:ATC] = ATC
-        # end
 
     elseif m == "CapacityManager"
 
@@ -58,6 +50,11 @@ function ADMM_subroutine!(m::String, results::Dict, ADMM::Dict, EOM::Dict, CM::D
         end
 
         mod.ext[:parameters][:CapCM_nodal] = CapCM_nodal
+        if data["Network"]["coupling"] == "ATC"
+            @timeit TO_local "Get ATC" begin
+                mod.ext[:parameters][:ATC] = solve_getATC!(mod, mod.ext[:parameters][:CapCM_nodal], mod.ext[:parameters][:d_scarcity])
+            end
+        end
         
         @timeit TO_local "Compute CapacityManager penalty terms" begin
             for (zone_idx, z) in enumerate(zones)

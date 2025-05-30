@@ -103,8 +103,8 @@ function define_common_parameters!(m::String,mod::Model, data::Dict, ts::DataFra
 
     # capacity market parameters
     mod.ext[:parameters][:coupling] = data["Network"]["coupling"]
-    mod.ext[:parameters][:MEC] = data["Network"]["MEC"]
     
 
     return mod, agents
 end
+

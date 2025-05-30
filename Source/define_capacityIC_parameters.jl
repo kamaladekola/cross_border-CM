@@ -1,6 +1,7 @@
 function define_capacityIC_parameters!(mod::Model, data::Dict, zones::Vector{String}, ptdf::DataFrame, scarcity::DataFrame)
 
     mod.ext[:sets][:JS] = 1:nrow(scarcity)
+    JS = mod.ext[:sets][:JS]
 
     node_syms = mod.ext[:parameters][:nodes]
 
@@ -29,7 +30,9 @@ function define_capacityIC_parameters!(mod::Model, data::Dict, zones::Vector{Str
 
     # initialize the CM accumulators
     # mod.ext[:parameters][:CapCM_zonal] = zeros(length(zones))
+    TCONNECT = mod.ext[:parameters][:TCONNECT]
     mod.ext[:parameters][:CapCM_nodal] = zeros(data["nNodes"])
+    mod.ext[:parameters][:ATC] = Dict(js => Dict(t => (0.0, 0.0) for t in TCONNECT)  for js in JS)
 
     return mod
 end

@@ -16,9 +16,7 @@ function build_capacityIC_agent!(mod::Model)
     nodal_PTDF = mod.ext[:parameters][:nodal_PTDF]
     d_scarcity = mod.ext[:parameters][:d_scarcity]
     CapCM_nodal = mod.ext[:parameters][:CapCM_nodal]
-
-    ATC  = mod.ext[:parameters][:MEC]
-    # MEC = get_ATC()
+    
 
     # ADMM penalty parameters for capacity market
     cap_bar = mod.ext[:parameters][:cap_bar] # ADMM consensus variables
@@ -86,12 +84,12 @@ function build_capacityIC_agent!(mod::Model)
             0 == sum((g_scarcity[js,jn] - demand[js,jn] + ens_cm[js,jn]) for jn in JN))
 
     elseif coupling == "ATC"     # each border is independently constrained by ATC 
-       ATC = mod.ext[:parameters][:ATC]    # Dict(A,B) 
-       mod.ext[:constraints][:cap_cm_atc_limit] =  @constraint(mod, [js in JS, t in TCONNECT],
-        -ATC[s,t] <= ex_cm[js,t] <= ATC[t])
+        ATC = mod.ext[:parameters][:ATC]
+        # ATC constraints
+        mod.ext[:constraints][:cap_cm_atc_limit] = @constraint(mod, [js in JS, t in TCONNECT], 
+            ATC[js][t][2] <= ex_cm[js,t] <= ATC[js][t][1])
     end
 
     return mod
 end
 
-# dscarcity as ratios of total capacity offered

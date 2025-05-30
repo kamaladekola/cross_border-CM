@@ -19,6 +19,9 @@ function solve_capacityIC_agent!(mod::Model)
     ex_cm       = mod.ext[:variables][:ex_cm]
     g_scarcity  = mod.ext[:variables][:g_scarcity]
     ens_cm      = mod.ext[:variables][:ens_cm]
+
+    TCONNECT = mod.ext[:parameters][:TCONNECT]
+    
     
     # demand = mod.ext[:expressions][:demand] = @expression(mod, [js in JS, jn in JN],
     #         d_scarcity[js, zone_of_idx[jn]] * sum(CapCM_nodal[n] for n in JN))
@@ -65,8 +68,14 @@ function solve_capacityIC_agent!(mod::Model)
         end
         mod.ext[:constraints][:cap_cm_global_balance] = @constraint(mod, [js in JS],
             0 == sum((g_scarcity[js,jn] - demand[js,jn] + ens_cm[js,jn]) for jn in JN))
+
     elseif coupling == "ATC"
-        # ATC = get_ATC()
+        ATC = mod.ext[:parameters][:ATC]
+        for js in JS, t in TCONNECT
+            delete(mod, mod.ext[:constraints][:cap_cm_atc_limit][js,t])
+        end
+        mod.ext[:constraints][:cap_cm_atc_limit] = @constraint(mod, [js in JS, t in TCONNECT], 
+            ATC[js][t][2] <= ex_cm[js,t] <= ATC[js][t][1])
     end
 
     optimize!(mod)

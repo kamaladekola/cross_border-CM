@@ -1,60 +1,81 @@
-function solve_getATC!(mod::Model; hour::Union{Int,Nothing}=nothing)
+function solve_getATC!(mod::Model,
+                       Cap_cm_nodal::AbstractVector,
+                       d_scarcity::AbstractMatrix)
 
-        # Sets
-    JH = mod.ext[:sets][:JH]           # hours
-    JZ = mod.ext[:sets][:JZ]           # zones
-    JL = mod.ext[:sets][:JL]           # lines
-    JN = mod.ext[:sets][:JN]           # nodes
-    JV = mod.ext[:sets][:JV]             # vertices
-    
-    nodes = mod.ext[:parameters][:nodes] 
+    m  = mod
+    JN = mod.ext[:sets][:JN]
+    JS = mod.ext[:sets][:JS]
+    JV = mod.ext[:sets][:JV]
+    JL = mod.ext[:sets][:JL]
+    JZ = mod.ext[:sets][:JZ]
+    zone_syms = mod.ext[:parameters][:zone_syms]
+    nodes = mod.ext[:parameters][:nodes]
     nodal_PTDF = mod.ext[:parameters][:nodal_PTDF]
-    D_nodal = mod.ext[:parameters][:D_nodal] 
-    Y_nodal = mod.ext[:parameters][:Y_nodal]
-
-
+    CapCM_nodal = mod.ext[:parameters][:CapCM_nodal]
     zone_of = mod.ext[:parameters][:zone_of]
-    BRANCHES = mod.ext[:parameters][:BRANCHES]
+    d_scarcity  = mod.ext[:parameters][:d_scarcity] 
+
+
+
     TCONNECT = mod.ext[:parameters][:TCONNECT]
-    zone_syms    = mod.ext[:parameters][:zone_syms] 
-    zone_of_idx = mod.ext[:parameters][:zone_of_idx]
-
-    atc_plus = mod.ext[:variables][:atc_plus]
+    atc_plus  = mod.ext[:variables][:atc_plus]
     atc_minus = mod.ext[:variables][:atc_minus]
-
-
-    v_dayahead = mod.ext[:variables][:v_dayahead]
-    v_redispatch = mod.ext[:variables][:v_redispatch]
-    net_pos = mod.ext[:variables][:net_pos]
-    e = mod.ext[:variables][:e]
     
-    @objective(m, Max, sum(atc_plus[t] + atc_minus[t] for t in TCONNECT))
+    v_dayahead   = mod.ext[:variables][:v_dayahead]
+    v_redispatch = mod.ext[:variables][:v_redispatch]
+    f = mod.ext[:variables][:f]
+    net_pos = mod.ext[:variables][:net_pos]
+    epsilon = 1e-10
 
-    for js in JS, jn in JN
-        delete(mod, mod.ext[:constraints][:dispatch_feasibility][js,jn])
-    end
-    mod.ext[:constraints][:dispatch_feasibility] = @constraint(mod, [js in JS, jn in JN], 
-    g_scarcity[js, jn] ≤ CapCM_nodal[jn]) 
+    zone_idx  = mod.ext[:parameters][:zone_of_idx]
+    demand = mod.ext[:parameters][:getATC_demand]
+    atc_results = Dict{Int,Dict{Tuple{Symbol,Symbol},Tuple{Float64,Float64}}}()
 
-        for jz in JZ
-            for jv in JV, jn in JN
-                delete(mod, mod.ext[:constraints][:getATC_zonal_balance][jv,jn])
-                delete(mod, mod.ext[:constraints][:getATC_redispatch_limit][jv,jn])
-            end
+    # mod.ext[:parameters][:CapCM_nodal] .= Cap_cm_nodal
 
-            mod.ext[:constraints][:getATC_zonal_balance] = @constraint(m, sum(Y_nodal[jn] *v_dayahead[jv,jn] for jn in JN if zone_idx_of[jn] == jz) - net_pos[v,jz]
-                == sum(D_nodal[jn] for jn in nodes if zone_idx_of[jn]==jz))
-                           
-            mod.ext[:constraints][:getATC_redispatch_limit] = @constraint(m, sum(Y_nodal[jn] * v_redispatch[v,jn] for jn in JN if zone_idx_of[jn] == jz) == 0)                        
+
+    for js in JS
+        demand .= d_scarcity[js, zone_idx] .* Cap_cm_nodal
+
+        mod.ext[:objective] = @objective(m, Max, sum(atc_plus[t] + atc_minus[t] for t in TCONNECT)
+        - epsilon * sum(atc_plus[t]^2 + atc_minus[t]^2 for t in TCONNECT)
+        )
+
+
+        for jv in JV, jl in JL
+            delete(mod, mod.ext[:constraints][:getATC_nodal_balance][jv, jl])
+        end
+        mod.ext[:constraints][:getATC_nodal_balance] = @constraint(m, [jv in JV, jl in JL],
+        # f[jv,jl] == sum(nodal_PTDF[jl, jn] * ((CapCM_nodal[jn] + ens[jn]) * (v_dayahead[jv,jn] + v_redispatch[jv,jn]) - demand[jn]) for jn in JN))
+        f[jv,jl] == sum(nodal_PTDF[jl, jn] * ((CapCM_nodal[jn]) * (v_dayahead[jv,jn] + v_redispatch[jv,jn]) - demand[jn]) for jn in JN))
+
+        for jv in JV, (jz, zsym) in enumerate(zone_syms)
+            delete(mod, mod.ext[:constraints][:getATC_zonal_balance][jv, (jz, zsym)])
+        end
+        mod.ext[:constraints][:getATC_zonal_balance] = @constraint(m, [jv in JV, (jz, zsym) in enumerate(zone_syms)],
+            # sum((CapCM_nodal[jn] + ens[jn]) * v_dayahead[jv,jn] for jn in JN if zone_of[nodes[jn]] == zsym)
+            sum((CapCM_nodal[jn]) * v_dayahead[jv,jn] for jn in JN if zone_of[nodes[jn]] == zsym)
+            - net_pos[jv,jz] == sum(demand[jn] for jn in JN if zone_of[nodes[jn]] == zsym))
+
+
+        for jv in JV, (jz, zsym) in enumerate(zone_syms)
+            delete(mod, mod.ext[:constraints][:getATC_redispatch_limit][jv, (jz, zsym)])
+        end
+        mod.ext[:constraints][:getATC_redispatch_limit] =
+            @constraint(m, [jv in JV, (jz, zsym) in enumerate(zone_syms)],
+            # sum((CapCM_nodal[jn] + ens[jn]) * v_redispatch[jv,jn] for jn in JN if zone_of[nodes[jn]] == zsym) == 0)
+            sum((CapCM_nodal[jn]) * v_redispatch[jv,jn] for jn in JN if zone_of[nodes[jn]] == zsym) == 0)
+
+        optimize!(mod)
+        status = JuMP.termination_status(mod)
+        if status ∉ (MOI.OPTIMAL, MOI.LOCALLY_SOLVED)
+            error("ATC model failed in scenario $js – status = $status")
         end
 
-    optimize!(mod)
+        plus   = value.(atc_plus)
+        minus  = value.(atc_minus)
 
-
-    atc_plus  = value.(mod.ext[:variables][:atc_plus])
-    atc_minus = value.(mod.ext[:variables][:atc_minus])
-
-    atc_vector = [(abs(atc_plus[t]), -abs(atc_minus[t])) for t in mod.ext[:parameters][:TCONNECT]]
-
-    return mod, atc_vector
+        atc_results[js] = Dict(t => (abs(plus[t]), -abs(minus[t])) for t in TCONNECT)
+    end
+    return atc_results
 end

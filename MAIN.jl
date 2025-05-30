@@ -63,6 +63,9 @@ include(joinpath(home_dir,"Source","solve_consumer_agent.jl"))
 include(joinpath(home_dir,"Source","solve_generator_agent.jl"))
 include(joinpath(home_dir,"Source","solve_interconnector_agent.jl")) # added interconnector agent
 include(joinpath(home_dir,"Source","solve_capacityIC_agent.jl")) # added capacity manager agent
+include(joinpath(home_dir,"Source","define_getATC.jl"))
+include(joinpath(home_dir,"Source","build_getATC.jl"))
+include(joinpath(home_dir,"Source","solve_getATC.jl"))
 include(joinpath(home_dir,"Source","update_rho.jl"))
 include(joinpath(home_dir,"Source","save_results.jl"))
 
@@ -79,7 +82,7 @@ lines = CSV.read(joinpath(home_dir,"Input","lines.csv"),delim=";",DataFrame)
 participation_matrix = CSV.read(joinpath(home_dir,"Input","participation_matrix.csv"),delim=";",DataFrame)
 derating_factor = CSV.read(joinpath(home_dir,"Input","derating_factor.csv"),delim=";",DataFrame)
 scarcity = CSV.read(joinpath(home_dir,"Input","scarcity.csv"),delim=";",DataFrame)
-const TCONNECT = [(:A,:C), (:C,:B), (:B,:A)]
+# const TCONNECT = [(:A,:C), (:C,:B), (:B,:A)]
 
 # Overview scenarios
 scenario_overview = CSV.read(joinpath(home_dir,"overview_scenarios.csv"),DataFrame,delim=";")
@@ -229,7 +232,6 @@ for m in agents[:IC]
     IC_data = merge(data["General"], data["Network"], data["Consumers"])
     define_common_parameters!(m, mdict[m], data, ts, agents, scenario_overview_row, zones, ptdf, nodal_ptdf, lines, participation_matrix, derating_factor) # Parameters common to all agents
     define_interconnector_parameters!(mdict[m], IC_data, zones, ptdf, nodal_ptdf, lines)                # Interconnectors
-    # define_getATC_parameters!(mdict[m]) # ATC parameters
 end
 
 # Capacity manager models
@@ -237,6 +239,9 @@ for m in agents[:CIC]
     CM_data = merge(data["General"], data["Network"], data["Consumers"]) # change to scarcity data
     define_common_parameters!(m, mdict[m], data, ts, agents, scenario_overview_row, zones, ptdf, nodal_ptdf, lines, participation_matrix, derating_factor) # Parameters common to all agents
     define_capacityIC_parameters!(mdict[m], CM_data, zones, ptdf, scarcity) # Capacity manager
+    if data["Network"]["coupling"] == "ATC"
+            define_getATC!(mdict[m]) # ATC parameters
+    end
 end
 
 ## 3. Define parameters for markets and representative agents
@@ -263,10 +268,13 @@ for m in agents[:Gen]
 end
 for m in agents[:IC]
     build_interconnector_agent!(mdict[m])
-    # build_getATC_agent!(mdict[m])
+    
 end
 for m in agents[:CIC]
     build_capacityIC_agent!(mdict[m])
+    if data["Network"]["coupling"] == "ATC"
+        build_getATC!(mdict[m])
+    end   
 end
 
 println("Build model: done")

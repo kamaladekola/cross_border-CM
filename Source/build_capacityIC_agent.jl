@@ -16,7 +16,8 @@ function build_capacityIC_agent!(mod::Model)
     nodal_PTDF = mod.ext[:parameters][:nodal_PTDF]
     d_scarcity = mod.ext[:parameters][:d_scarcity]
     CapCM_nodal = mod.ext[:parameters][:CapCM_nodal]
-    
+    Cap_Demand_nodal = mod.ext[:parameters][:Cap_Demand_nodal] # capacity demand per zone
+    ATC = mod.ext[:parameters][:ATC]
 
     # ADMM penalty parameters for capacity market
     cap_bar = mod.ext[:parameters][:cap_bar] # ADMM consensus variables
@@ -28,29 +29,33 @@ function build_capacityIC_agent!(mod::Model)
     flow_cm = mod.ext[:variables][:flow_cm] = @variable(mod, [js=JS, jl=JL], base_name = "flow_cm")
     ex_cm = mod.ext[:variables][:ex_cm] = @variable(mod, [js=JS, t in TCONNECT], base_name = "ex_cm")
     g_scarcity = mod.ext[:variables][:g_scarcity] = @variable(mod, [js=JS,jn=JN], lower_bound=0, base_name = "dispatch")     # check dispatch feasibility
-    ens_cm = mod.ext[:variables][:ens_cm] = @variable(mod, [js=JS, jn=JN], lower_bound=0, base_name = "ens_cm")
+
+    ens_pos = mod.ext[:variables][:ens_pos] = @variable(mod, [js=JS, jn=JN], lower_bound = 0)          # extra gen   (MW)
+    ens_neg = mod.ext[:variables][:ens_neg] = @variable(mod, [js=JS, jn=JN], lower_bound = 0)           # shed load   (MW)
+
+    ens_cm = mod.ext[:expressions][:ens_cm] = @expression(mod, [js=JS, jn=JN], ens_pos[js,jn] - ens_neg[js,jn])
+    # ens_cm = mod.ext[:variables][:ens_cm] = @variable(mod, [js=JS, jn=JN], lower_bound=0, base_name = "ens_cm")
 
     # Objective
     mod.ext[:objective] =  @objective(mod, Min,
     - sum(λ_CM[jz] * cap_cm[jz] for jz in JZ) 
     + sum(ρ_CM[jz]/2 * (cap_cm[jz] - cap_bar[jz])^2 for jz in JZ)
-    + sum(((ens_cm[js,jn])^2 * 1e10) for js in JS, jn in JN)
+    # + sum(((ens_cm[js,jn])^2 * 1e8) for js in JS, jn in JN)
     )
 
+    # demand = mod.ext[:expressions][:demand] = @expression(mod, [js in JS, jn in JN],
+    #         d_scarcity[js, jn] * sum(CapCM_nodal[n] for n in JN))
 
     demand = mod.ext[:expressions][:demand] = @expression(mod, [js in JS, jn in JN],
-            d_scarcity[js, zone_of_idx[jn]] * CapCM_nodal[jn])
-
-    # demand = mod.ext[:expressions][:demand] = @expression(mod, [js in JS, jn in JN],
-    #         d_scarcity[js, zone_of_idx[jn]] * sum(CapCM_nodal[n] for n in JN))
+            d_scarcity[js, jn] * Cap_Demand_nodal[jn])
 
     mod.ext[:constraints][:CapacityNP] = @constraint(mod, sum(cap_cm[jz] for jz in JZ) == 0) # capacity netposition
 
     # dispatch scenarios
     mod.ext[:constraints][:capacity_limit] = @constraint(mod, [js in JS, jn in JN], g_scarcity[js, jn] <= CapCM_nodal[jn])  # dispatched electricity across interconnector must be less than capacity offers.
     
-    # ############ Including exact projection constraints
-    # exchanges and flows
+    ############ Including exact projection constraints
+    ## exchanges and flows
     for (jl,(i,j,_)) in enumerate(BRANCHES), js in JS
         if (zone_of[i],zone_of[j]) in TCONNECT
             mod.ext[:constraints][Symbol("ex_cm$(js)_$(jl)")] = @constraint(mod, flow_cm[js,jl] == ex_cm[js, (zone_of[i],zone_of[j])])
@@ -59,7 +64,7 @@ function build_capacityIC_agent!(mod::Model)
         end
     end
 
-    # thermal limit
+    ## thermal limit
     mod.ext[:constraints][:thermal_limit] = @constraint(mod, [js in JS, jl in JL], -BRANCHES[jl][3] <= flow_cm[js,jl] <= BRANCHES[jl][3])
 
     # netposition = exports + imports (negative netposition --> export) 
@@ -68,11 +73,11 @@ function build_capacityIC_agent!(mod::Model)
           sum(ex_cm[js,t] for t in TCONNECT if t[2] == zone_syms[jz])
           - sum(ex_cm[js,t] for t in TCONNECT if t[1] == zone_syms[jz])
           )
+    # ## netposition = exports + imports (negative netposition --> export) 
+    # mod.ext[:constraints][:cap_cm_netposition] = @constraint(mod, [js in JS, jz in JZ],
+    #     cap_cm[jz] == 0) # set this for implict CM and no cm
+    # netposition = exports + imports (negative netposition --> export) 
 
-    # mod.ext[:constraints][:zonal_balance] = @constraint(mod, [js in JS, jz in JZ],
-    #     sum(g_scarcity[js,jn] for jn in JN if zone_of_idx[jn] == jz)
-    #     + sum(ens_cm[js,jn] for jn in JN if zone_of_idx[jn] == jz)
-    #     + cap_cm[jz] == sum(demand[js,jn] for jn in JN if zone_of_idx[jn] == jz))
 
 
     if coupling == "FB"
@@ -84,8 +89,13 @@ function build_capacityIC_agent!(mod::Model)
             0 == sum((g_scarcity[js,jn] - demand[js,jn] + ens_cm[js,jn]) for jn in JN))
 
     elseif coupling == "ATC"     # each border is independently constrained by ATC 
-        ATC = mod.ext[:parameters][:ATC]
         # ATC constraints
+
+        mod.ext[:constraints][:zonal_balance] = @constraint(mod, [js in JS, jz in JZ],
+        sum(g_scarcity[js,jn] for jn in JN if zone_of_idx[jn] == jz)
+        + sum(ens_cm[js,jn] for jn in JN if zone_of_idx[jn] == jz)
+        + cap_cm[jz] == sum(demand[js,jn] for jn in JN if zone_of_idx[jn] == jz))
+        
         mod.ext[:constraints][:cap_cm_atc_limit] = @constraint(mod, [js in JS, t in TCONNECT], 
             ATC[js][t][2] <= ex_cm[js,t] <= ATC[js][t][1])
     end

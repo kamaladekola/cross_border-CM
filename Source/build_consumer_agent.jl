@@ -15,7 +15,7 @@ function build_consumer_agent!(mod::Model, m::String, zones::Vector{String})
     CD = mod.ext[:parameters][:CD]                    # if we want to use predefined Capacity demand
     CD_margin = mod.ext[:parameters][:CD_margin]      # capacity demand margin
     σ_CM = mod.ext[:parameters][:σ_CM]                # 1 if capacity markets are active, 0 otherwise
-    D_max = mod.ext[:parameters][:D_max]            # maximum demand (can be used in place of CD)
+    # D_max = mod.ext[:parameters][:D_max]            # maximum demand (can be used in place of CD)
     # WTP_CM = mod.ext[:parameters][:WTP_CM]          # Willingness to pay for capacity in the CM (price target)
 
     # ADMM parameters
@@ -44,8 +44,8 @@ function build_consumer_agent!(mod::Model, m::String, zones::Vector{String})
 
     neg_utility = mod.ext[:expressions][:utility] = @expression(mod,                                                                                           
     sum(W[jh] * ((λ_EOM[jh] - WTP)*g_positive[jh] + (WTP/(2*ela*D[jh]))*(g_ela[jh])^2) for jh in JH)
-    + σ_CM * sum(λ_CM[jz] * cap_cm[jz] * PM[m][zones[jz]] for jz in JZ)
-    # + sum(W[jh] * WTP * ens[jh] for jh in JH)
+    + σ_CM * sum(λ_CM[jz] * cap_cm[jz] * PM[m][zones[jz]] for jz in JZ) # should I add a willigness to pay for capacity market?
+    # + sum(W[jh] * WTP * ens[jh] for jh in JH) # should I penalize unserved energy?
     )
 
     # Objective => minimize negative utility (maximize utility)
@@ -69,18 +69,24 @@ function build_consumer_agent!(mod::Model, m::String, zones::Vector{String})
 
     for jz in JZ
         if zones[jz] == z
-            mod.ext[:constraints][Symbol("CD_$jz")] = @constraint(mod, cap_cm[jz] >= σ_CM * PM[m][zones[jz]] * D_max)
-            mod.ext[:constraints][Symbol("CD_upper_$jz")] = @constraint(mod, cap_cm[jz] <= σ_CM * PM[m][zones[jz]] * (1 + CD_margin) * D_max)
+            # for gh in timesteps
+                #  if lambda_eom > 300
+            mod.ext[:constraints][Symbol("CD_$jz")] = @constraint(mod, cap_cm[jz] >= σ_CM * PM[m][zones[jz]] * (1 - CD_margin) * CD)
+            mod.ext[:constraints][Symbol("CD_upper_$jz")] = @constraint(mod, cap_cm[jz] <= σ_CM * PM[m][zones[jz]] * (1 + CD_margin) * CD)
         else
             mod.ext[:constraints][Symbol("CD_$jz")] = @constraint(mod, cap_cm[jz] == 0.0)
             mod.ext[:constraints][Symbol("CD_upper_$jz")] = @constraint(mod, cap_cm[jz] <= 0.0)
         end
     end
+    
     # Battery / electrolyzer model 
 
     # find peak 
     # peak greater than g[jh]
     # peak greater than 0
+    # multiple consumers and reliability options for future work.
+    # including multiple CM implementations.
+    # different capacity market zones from energy market zones
 
     return mod
 end

@@ -5,23 +5,16 @@ function define_capacityIC_parameters!(mod::Model, data::Dict, zones::Vector{Str
 
     node_syms = mod.ext[:parameters][:nodes]
 
-    node_shares = Dict{String,Dict{Symbol,Float64}}()
+    node_shares = Dict{String, Dict{Symbol,Float64}}()
     for zone in zones
-        cons_conf = get(data, zone, Dict{Any,Any}())
-        shares = Dict{Symbol,Float64}()
-        ns = get(cons_conf, "NodeShare", get(cons_conf, :NodeShare, Dict{Any,Any}()))
-        for (n_str, s) in ns
-            shares[Symbol(n_str)] = s
-        end
-        node_shares[zone] = shares
+        # data["Consumers"][zone] still contains the NodeShare block
+        cons_conf = data["Consumers"][zone]
+        raw_ns = get(cons_conf, "NodeShare", Dict())  # Dict("n1"=>0.51, …)
+        node_shares[zone] = Dict(Symbol(k) => v for (k,v) in raw_ns)
     end
 
-    M = zeros(length(zones), length(node_syms))
-    for (jz, zone) in enumerate(zones)
-        for (jn, node) in enumerate(node_syms)
-            M[jz, jn] = get( node_shares[zone], node, 0.0 )
-        end
-    end
+
+    M = [get(node_shares[zone], node, 0.0) for zone in zones, node in node_syms]
 
     sc = copy(scarcity)
     rename!(sc, names(sc)[1] => :scenario)
@@ -31,8 +24,13 @@ function define_capacityIC_parameters!(mod::Model, data::Dict, zones::Vector{Str
     # initialize the CM accumulators
     # mod.ext[:parameters][:CapCM_zonal] = zeros(length(zones))
     TCONNECT = mod.ext[:parameters][:TCONNECT]
-    mod.ext[:parameters][:CapCM_nodal] = zeros(data["nNodes"])
+    mod.ext[:parameters][:CapCM_nodal] = zeros(data["General"]["nNodes"])
     mod.ext[:parameters][:ATC] = Dict(js => Dict(t => (0.0, 0.0) for t in TCONNECT)  for js in JS)
+
+    capacity_demand_zonal = [get(data["CM"][zone], "capacity_target", 0.0) for zone in zones]
+    
+    mod.ext[:parameters][:Cap_Demand_nodal] = vec(M' * capacity_demand_zonal)
+    # mod.ext[:parameters][:Cap_Demand_nodal] = zeros(data["General"]["nNodes"]) # debugging
 
     return mod
 end

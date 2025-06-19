@@ -31,7 +31,12 @@ function build_interconnector_agent!(mod::Model)
     g_red = mod.ext[:variables][:redispatch] = @variable(mod, g_red[jh in JH, jn in JN], base_name = "redispatch")
     flow  = mod.ext[:variables][:flow] = @variable(mod, flow[jh in JH, jl in JL], base_name = "flow")
     ex = mod.ext[:variables][:exchange] = @variable(mod, ex[jh in JH, t in TCONNECT], base_name = "exchange") # net exchange between zones
-    ens_IC = mod.ext[:variables][:ens_IC] = @variable(mod, ens[jh in JH, jn in JN], base_name = "ens_IC")
+
+    ens_pos = mod.ext[:variables][:ens_pos] = @variable(mod, [jh in JH, jn in JN], lower_bound = 0)          # extra gen   (MW)
+    ens_neg = mod.ext[:variables][:ens_neg] = @variable(mod, [jh in JH, jn in JN], lower_bound = 0)           # shed load   (MW)
+
+    ens_IC = mod.ext[:expressions][:ens_IC] = @expression(mod, [jh in JH, jn in JN], ens_pos[jh,jn] - ens_neg[jh,jn])
+    # ens_IC = mod.ext[:variables][:ens_IC] = @variable(mod, [jh in JH, jn in JN], base_name = "ens_IC")
 
     # Objective
     mod.ext[:objective] = @objective(mod, Min, 
@@ -59,6 +64,9 @@ function build_interconnector_agent!(mod::Model)
         sum(ex[jh, t] for t in TCONNECT if t[2] == zone_syms[jz])
         - sum(ex[jh, t] for t in TCONNECT if t[1] == zone_syms[jz])
     )
+
+    # mod.ext[:constraints][:net_pos] = @constraint(mod, [jh in JH, jz in JZ], g[jh,jz] == 0) # killing interconnector
+
 
     # nodal balance constraint: flow = generation + redispatch - demand --> for all nodes
     mod.ext[:constraints][:nodal_balance] = @constraint(mod, [jh in JH, jl in JL],

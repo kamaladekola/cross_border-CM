@@ -34,7 +34,7 @@ function ADMM_subroutine!(m::String, results::Dict, ADMM::Dict, EOM::Dict, CM::D
         @timeit TO_local "Solve network manager problem" begin
             solve_interconnector_agent!(mod)
             status = JuMP.termination_status(mod)
-            if status != MOI.OPTIMAL && status != MOI.LOCALLY_SOLVED
+            if status != MOI.OPTIMAL #&& status != MOI.LOCALLY_SOLVED
                 error("ADMM_subroutine!($m) did not solve to optimality.  status = $status")
             end
         end
@@ -52,7 +52,7 @@ function ADMM_subroutine!(m::String, results::Dict, ADMM::Dict, EOM::Dict, CM::D
         mod.ext[:parameters][:CapCM_nodal] = CapCM_nodal
         if data["Network"]["coupling"] == "ATC"
             @timeit TO_local "Get ATC" begin
-                mod.ext[:parameters][:ATC] = solve_getATC!(mod, mod.ext[:parameters][:CapCM_nodal], mod.ext[:parameters][:d_scarcity])
+                mod.ext[:parameters][:ATC] = solve_getATC!(mod)
             end
         end
         
@@ -67,7 +67,7 @@ function ADMM_subroutine!(m::String, results::Dict, ADMM::Dict, EOM::Dict, CM::D
         @timeit TO_local "Solve capacity manager problem" begin
             solve_capacityIC_agent!(mod)
             status = JuMP.termination_status(mod)
-            if status != MOI.OPTIMAL && status != MOI.LOCALLY_SOLVED
+            if status != MOI.OPTIMAL #&& status != MOI.LOCALLY_SOLVED
                 error("ADMM_subroutine!($m) did not solve to optimality.  status = $status")
             end
         end

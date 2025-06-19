@@ -9,6 +9,6 @@ function define_getATC!(mod::Model)
     mod.ext[:parameters][:signs] = signs
     JN = mod.ext[:sets][:JN]
     # mod.ext[:parameters][:getATC_demand] = zeros(length(JN))
-    mod.ext[:parameters][:getATC_demand] = fill(0.0, length(JN))
+    mod.ext[:parameters][:Cap_Demand_nodal] = mod.ext[:parameters][:Cap_Demand_nodal]
     return mod
 end

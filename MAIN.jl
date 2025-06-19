@@ -236,9 +236,8 @@ end
 
 # Capacity manager models
 for m in agents[:CIC]
-    CM_data = merge(data["General"], data["Network"], data["Consumers"]) # change to scarcity data
     define_common_parameters!(m, mdict[m], data, ts, agents, scenario_overview_row, zones, ptdf, nodal_ptdf, lines, participation_matrix, derating_factor) # Parameters common to all agents
-    define_capacityIC_parameters!(mdict[m], CM_data, zones, ptdf, scarcity) # Capacity manager
+    define_capacityIC_parameters!(mdict[m], data, zones, ptdf, scarcity) # Capacity manager
     if data["Network"]["coupling"] == "ATC"
             define_getATC!(mdict[m]) # ATC parameters
     end

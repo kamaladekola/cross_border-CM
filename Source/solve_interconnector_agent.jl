@@ -25,12 +25,14 @@ function solve_interconnector_agent!(mod::Model)
     ens_pos = mod.ext[:variables][:ens_pos]
     ens_neg = mod.ext[:variables][:ens_neg]
     ens_IC = mod.ext[:expressions][:ens_IC]
+    # ens_IC = mod.ext[:variables][:ens_IC]
 
     ## Objective
     mod.ext[:objective] = @objective(mod, Min, 
     - sum(W[jh] * λ_all[jh,jz] * g[jh,jz] for jh in JH, jz in JZ)
     + sum(W[jh] * (ρ_all[jz]/2) * (g[jh,jz] - g_bar_all[jh,jz])^2 for jh in JH, jz in JZ)
-    + sum(W[jh] * ((ens_pos[jh,jn] + ens_neg[jh,jn]) * 1e7) for jh in JH, jn in JN)
+    + sum(W[jh] * ((ens_pos[jh,jn] + ens_neg[jh,jn]) * 1e8) for jh in JH, jn in JN)
+    # + sum(W[jh] * ens_IC[jh,jn] * 1e7 for jh in JH, jn in JN)
     )
 
     # mod.ext[:objective] = @objective(mod, Min, 0)

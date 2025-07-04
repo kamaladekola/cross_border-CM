@@ -23,6 +23,7 @@ function solve_capacityIC_agent!(mod::Model)
     ens_pos     = mod.ext[:variables][:ens_pos]
     ens_neg     = mod.ext[:variables][:ens_neg]
     ens_cm      = mod.ext[:expressions][:ens_cm]
+    # ens_cm      = mod.ext[:variables][:ens_cm]
 
     TCONNECT = mod.ext[:parameters][:TCONNECT]
     ATC = mod.ext[:parameters][:ATC]
@@ -37,7 +38,7 @@ function solve_capacityIC_agent!(mod::Model)
     mod.ext[:objective] = @objective(mod, Min,
         - sum(λ_CM[jz] * cap_cm[jz] for jz in JZ)
         + sum(ρ_CM[jz]/2 * (cap_cm[jz] - cap_bar[jz])^2 for jz in JZ)
-        + sum((ens_pos[js,jn] + ens_neg[js,jn]) * 1e8 for js in JS, jn in JN)
+        + sum((ens_pos[js,jn] + ens_neg[js,jn]) * 1e12 for js in JS, jn in JN)
     )
 
     # mod.ext[:objective] = @objective(mod, Min, 0)

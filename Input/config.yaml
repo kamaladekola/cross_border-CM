@@ -8,7 +8,7 @@ General:
 ADMM:
   rho_EOM: 1 # rho ADMM penalty term, EOM
   rho_CM: 1 # rho ADMM penalty term, CM
-  max_iter: 5000
+  max_iter: 10000
   epsilon: 0.1 # 0.1 # stopping criterion - tolerance on "accuracy" with which the coupling constraints are satisfied. Applied to dual and primal residuals.
   CircularBufferSize: 5 # number of iterations for which data will be retained, should be at least 2 and less than max_iter
 
@@ -21,11 +21,11 @@ Consumers: # consumers by zones
   A:
     WTP: 4000.0 # Max clearing price (€/MWh)
     D: "A" # Demand timeseries that needs to be picked up
-    ela: 0.08 # fraction of demand that is elastic # 0.08 at WTP = 4000, 0.2 at WTP = 10000
-    sigmaCM: 0 # if 0, change scarcity data to 0
+    ela: 0.08 # fraction of demand that is elastic # 0.08 at WTP = 4000, 0.4 at WTP = 20000
+    sigmaCM: 1 # if 0, change scarcity data to 0
     NodeShare:
-        n1: 0.52
-        n2: 0.48
+        n1: 0.5
+        n2: 0.5
 
   B:
     WTP: 4000.0 # Max clearing price (€/MWh)
@@ -48,10 +48,10 @@ Generators:
   A: 
     Baseload:
       a: 0.0008 # (€/MWh)^2
-      b: 34 # €/MWh
+      b: 28 # €/MWh
       C: 0 # MW - existing capacity (set to zero if greenfield)
       I: 190000 # €/MW-year - annualized investment cost (convert to €/MW-year?)
-      max_cap: 50000 # MW - maximum capacity
+      max_cap: 100000 # MW - maximum capacity
       sigmaCM: 1
       NodeShare:
           n1: 0.5
@@ -62,7 +62,7 @@ Generators:
       b: 51 # €/MWh
       C: 0 # MW - existing capacity (set to zero if greenfield)
       I: 110000 # €/MW-year - annualized investment cost
-      max_cap: 50000 # MW - maximum capacity
+      max_cap: 100000 # MW - maximum capacity
       sigmaCM: 1
       NodeShare:
           n1: 0.5
@@ -104,10 +104,10 @@ Generators:
   B:
     Baseload:
       a: 0.008 # (€/MWh)^2
-      b: 36 # €/MWh
+      b: 30 # €/MWh
       C: 0 # MW - existing capacity (set to zero if greenfield)
       I: 180000 # €/MW-year - annualized investment cost (convert to €/MW-year?)
-      max_cap: 50000 # MW - maximum capacity
+      max_cap: 100000 # MW - maximum capacity
       sigmaCM: 1
       NodeShare:
           n3: 1.0
@@ -117,7 +117,7 @@ Generators:
       b: 53 # €/MWh
       C: 0 # MW - existing capacity (set to zero if greenfield)
       I: 100000 # €/MW-year - annualized investment cost
-      max_cap: 50000 # MW - maximum capacity
+      max_cap: 100000 # MW - maximum capacity
       sigmaCM: 1
       NodeShare:
           n3: 1.0
@@ -157,20 +157,20 @@ Generators:
   C: 
     Baseload:
       a: 0.008 # (€/MWh)^2
-      b: 38 # €/MWh
+      b: 32 # €/MWh
       C: 0 # MW - existing capacity (set to zero if greenfield)
       I: 170000 # €/MW-year - annualized investment cost (convert to €/MW-year?)
-      max_cap: 50000 # MW - maximum capacity
+      max_cap: 100000 # MW - maximum capacity
       sigmaCM: 1
       NodeShare:
           n4: 1.0
 
     MidMerit:
       a: 0.032 # (€/MWh)^2
-      b: 57 # €/MWh
+      b: 55 # €/MWh
       C: 0 # MW - existing capacity (set to zero if greenfield)
       I: 90000 # €/MW-year - annualized investment cost
-      max_cap: 50000 # MW - maximum capacity
+      max_cap: 100000 # MW - maximum capacity
       sigmaCM: 1
       NodeShare:
           n4: 1.0
@@ -209,26 +209,29 @@ Generators:
 
 CM:
   A:
-    capacity_target: 50000.0   # MW (Dispatchable capacity of zone A when there is no interconnection and no price cap aka autarky)
-    # capacity_target: 48000.0 # for implicit, dispatchable capacity is calculated accounting for interconnections but no price cap
+    capacity_target: 69424.62 # 41012.62 + 28411.99974   # MW (Dispatchable capacity of zone A when there is no interconnection and no price cap aka autarky)
+    # capacity_target: 70000 # for implicit, dispatchable capacity is calculated accounting for interconnections but no price cap
+    # capacity_target: 80000 # peak load
     price_target: 180000.0    # €/MW (price target for zone A)
-    capacity_margin: 0.10     # 10% capacity margin
+    capacity_margin: 0.15     # 20% capacity margin
     min_price: -10000000
     max_price: 10000000
     D: "A" #
   B:
-    capacity_target: 14000.0
-    # capacity_target: 13500.0
+    capacity_target: 9941.73 # 8402.08 + 1539.650173
+    # capacity_target: 10500
+    # capacity_target: 15000 # peak load
     price_target: 180000.0
-    capacity_margin: 0.10
+    capacity_margin: 0.15
     min_price: -10000000
     max_price: 10000000
     D: "B"
   C:
-    capacity_target: 18000.0
-    # capacity_target: 16000.0
+    capacity_target: 15306.93 #11046.68 + 4260.249995
+    capacity_target: 16500
+    capacity_target: 20000 # peak load
     price_target: 180000.0
-    capacity_margin: 0.10
+    capacity_margin: 0.15
     min_price: -10000000
     max_price: 10000000
     D: "C"
@@ -249,6 +252,6 @@ Network:
   lines: "lines"  # lines dataframe
   ptdf: "ptdf"  # PTDF dataframe
   nodal_ptdf: "nodal_ptdf"  # nodal PTDF dataframe
-  coupling: "ATC"  # or "FB" or "ATC"
+  coupling: "FB"  # or "FB" or "ATC"
 
 

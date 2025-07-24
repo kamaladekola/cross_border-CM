@@ -54,29 +54,13 @@ function build_capacityIC_agent!(mod::Model)
     # dispatch scenarios
     mod.ext[:constraints][:capacity_limit] = @constraint(mod, [js in JS, jn in JN], g_scarcity[js, jn] <= CapCM_nodal[jn])  # dispatched electricity across interconnector must be less than capacity offers.
     
-    ############ Including exact projection constraints
-    ## exchanges and flows
-    for (jl,(i,j,_)) in enumerate(BRANCHES), js in JS
-        if (zone_of[i],zone_of[j]) in TCONNECT
-            mod.ext[:constraints][Symbol("ex_cm$(js)_$(jl)")] = @constraint(mod, flow_cm[js,jl] == ex_cm[js, (zone_of[i],zone_of[j])])
-        elseif (zone_of[j],zone_of[i]) in TCONNECT
-            mod.ext[:constraints][Symbol("ex_cm$(js)_$(jl)")] = @constraint(mod, flow_cm[js,jl] == -ex_cm[js, (zone_of[j],zone_of[i])])
-        end
-    end
 
-    ## thermal limit
-    mod.ext[:constraints][:thermal_limit] = @constraint(mod, [js in JS, jl in JL], -BRANCHES[jl][3] <= flow_cm[js,jl] <= BRANCHES[jl][3])
 
-    # # netposition = exports + imports (negative netposition --> export) 
-    # mod.ext[:constraints][:cap_cm_netposition] = @constraint(mod, [js in JS, jz in JZ],
-    #     cap_cm[jz] ==
-    #       sum(ex_cm[js,t] for t in TCONNECT if t[2] == zone_syms[jz])
-    #       - sum(ex_cm[js,t] for t in TCONNECT if t[1] == zone_syms[jz])
-    #       )
+
           
     # ## netposition = exports + imports (negative netposition --> export) 
-    mod.ext[:constraints][:cap_cm_netposition] = @constraint(mod, [js in JS, jz in JZ],
-        cap_cm[jz] == 0) # set this for implict CM and no cm
+    # mod.ext[:constraints][:cap_cm_netposition] = @constraint(mod, [js in JS, jz in JZ],
+    #     cap_cm[jz] == 0) # set this for implict CM and no cm
     # netposition = exports + imports (negative netposition --> export) 
 
 
@@ -89,6 +73,19 @@ function build_capacityIC_agent!(mod::Model)
         # mod.ext[:constraints][:cap_cm_global_balance] = @constraint(mod, [js in JS],
         #     0 == sum((g_scarcity[js,jn] - demand[js,jn] + ens_cm[js,jn]) for jn in JN))
 
+    ############ Including exact projection constraints
+    ## exchanges and flows
+        for (jl,(i,j,_)) in enumerate(BRANCHES), js in JS
+            if (zone_of[i],zone_of[j]) in TCONNECT
+                mod.ext[:constraints][Symbol("ex_cm$(js)_$(jl)")] = @constraint(mod, flow_cm[js,jl] == ex_cm[js, (zone_of[i],zone_of[j])])
+            elseif (zone_of[j],zone_of[i]) in TCONNECT
+                mod.ext[:constraints][Symbol("ex_cm$(js)_$(jl)")] = @constraint(mod, flow_cm[js,jl] == -ex_cm[js, (zone_of[j],zone_of[i])])
+            end
+        end
+
+        ## thermal limit
+        mod.ext[:constraints][:thermal_limit] = @constraint(mod, [js in JS, jl in JL], -BRANCHES[jl][3] <= flow_cm[js,jl] <= BRANCHES[jl][3])
+
     elseif coupling == "ATC"     # each border is independently constrained by ATC 
         # ATC constraints
 
@@ -96,7 +93,13 @@ function build_capacityIC_agent!(mod::Model)
         # sum(g_scarcity[js,jn] for jn in JN if zone_of_idx[jn] == jz)
         # + sum(ens_cm[js,jn] for jn in JN if zone_of_idx[jn] == jz)
         # + cap_cm[jz] == sum(demand[js,jn] for jn in JN if zone_of_idx[jn] == jz))
-        
+           # # netposition = exports + imports (negative netposition --> export) 
+        mod.ext[:constraints][:cap_cm_netposition] = @constraint(mod, [js in JS, jz in JZ],
+            cap_cm[jz] ==
+            sum(ex_cm[js,t] for t in TCONNECT if t[2] == zone_syms[jz])
+            - sum(ex_cm[js,t] for t in TCONNECT if t[1] == zone_syms[jz])
+            ) 
+#  no redispatch in the ATC case
         mod.ext[:constraints][:cap_cm_atc_limit] = @constraint(mod, [js in JS, t in TCONNECT], 
             ATC[js][t][2] <= ex_cm[js,t] <= ATC[js][t][1])
     end

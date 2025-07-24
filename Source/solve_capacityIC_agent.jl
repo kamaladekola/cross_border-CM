@@ -1,3 +1,4 @@
+
 function solve_capacityIC_agent!(mod::Model)
     
     JZ = mod.ext[:sets][:JZ]
@@ -34,14 +35,14 @@ function solve_capacityIC_agent!(mod::Model)
     # demand = mod.ext[:expressions][:demand] = @expression(mod, [js in JS, jn in JN],
     #         d_scarcity[js, jn] * Cap_Demand_nodal[jn])
 
-    # # Objective
-    mod.ext[:objective] = @objective(mod, Min,
-        - sum(λ_CM[jz] * cap_cm[jz] for jz in JZ)
-        + sum(ρ_CM[jz]/2 * (cap_cm[jz] - cap_bar[jz])^2 for jz in JZ)
-        + sum((ens_pos[js,jn] + ens_neg[js,jn]) * 1e12 for js in JS, jn in JN)
-    )
+    # # # Objective
+    # mod.ext[:objective] = @objective(mod, Min,
+    #     - sum(λ_CM[jz] * cap_cm[jz] for jz in JZ)
+    #     + sum(ρ_CM[jz]/2 * (cap_cm[jz] - cap_bar[jz])^2 for jz in JZ)
+    #     + sum((ens_pos[js,jn] + ens_neg[js,jn]) * 1e10 for js in JS, jn in JN)
+    # )
 
-    # mod.ext[:objective] = @objective(mod, Min, 0)
+    mod.ext[:objective] = @objective(mod, Min, 0)
 
     # nodal capacity limits
     for js in JS, jn in JN
@@ -93,6 +94,8 @@ function solve_capacityIC_agent!(mod::Model)
         # end
         mod.ext[:constraints][:cap_cm_atc_limit] = @constraint(mod, [js in JS, t in TCONNECT], 
             ATC[js][t][2] <= ex_cm[js,t] <= ATC[js][t][1])
+            # -1000 <= ex_cm[js,t] <= 1000) # debugging
+
     end
 
     optimize!(mod)

@@ -16,22 +16,21 @@ EOM:
   parameter_A: 1 # dummy, not used 
 
 
-
 Consumers: # consumers by zones
   A:
     WTP: 4000.0 # Max clearing price (€/MWh)
     D: "A" # Demand timeseries that needs to be picked up
     ela: 0.08 # fraction of demand that is elastic # 0.08 at WTP = 4000, 0.4 at WTP = 20000
-    sigmaCM: 1 # if 0, change scarcity data to 0
+    sigmaCM: 0 # if 0, change scarcity data to 0
     NodeShare:
-        n1: 0.5
-        n2: 0.5
+        n1: 0.50
+        n2: 0.50
 
   B:
     WTP: 4000.0 # Max clearing price (€/MWh)
     D: "B" # Timeseries that needs to be picked up
     ela: 0.08 # fraction of demand that is elastic
-    sigmaCM: 1
+    sigmaCM: 0
     NodeShare:
         n3: 1.0
 
@@ -39,7 +38,7 @@ Consumers: # consumers by zones
     WTP: 4000.0 # Max clearing price (€/MWh)
     D: "C" # Timeseries that needs to be picked up
     ela: 0.08 # fraction of demand that is elastic
-    sigmaCM: 1
+    sigmaCM: 0
     NodeShare:
         n4: 1.0
 
@@ -54,8 +53,8 @@ Generators:
       max_cap: 100000 # MW - maximum capacity
       sigmaCM: 1
       NodeShare:
-          n1: 0.5
-          n2: 0.5
+          n1: 0.50
+          n2: 0.50
 
     MidMerit:
       a: 0.0032 # (€/MWh)^2
@@ -65,8 +64,8 @@ Generators:
       max_cap: 100000 # MW - maximum capacity
       sigmaCM: 1
       NodeShare:
-          n1: 0.5
-          n2: 0.5
+          n1: 0.50
+          n2: 0.50
 
     Peak:
       a: 0.008 # (€/MWh)^2
@@ -76,8 +75,8 @@ Generators:
       max_cap: 100000 # MW - maximum capacity
       sigmaCM: 1
       NodeShare:
-          n1: 0.5
-          n2: 0.5
+          n1: 0.50
+          n2: 0.50
 
     WindOnshore:
       a: 0 # (€/MWh)^2
@@ -88,8 +87,8 @@ Generators:
       AF: "A"
       sigmaCM: 0
       NodeShare:
-          n1: 0.5
-          n2: 0.5
+          n1: 0.50
+          n2: 0.50
     PV:
       a: 0 # (€/MWh)^2
       b: 0 # €/MWh
@@ -99,8 +98,8 @@ Generators:
       AF: "A"
       sigmaCM: 0
       NodeShare:
-          n1: 0.5
-          n2: 0.5
+          n1: 0.50
+          n2: 0.50
   B:
     Baseload:
       a: 0.008 # (€/MWh)^2
@@ -209,28 +208,26 @@ Generators:
 
 CM:
   A:
-    capacity_target: 69424.62 # 41012.62 + 28411.99974   # MW (Dispatchable capacity of zone A when there is no interconnection and no price cap aka autarky)
-    # capacity_target: 70000 # for implicit, dispatchable capacity is calculated accounting for interconnections but no price cap
-    # capacity_target: 80000 # peak load
-    price_target: 180000.0    # €/MW (price target for zone A)
+
+    capacity_target: 59711.6 # explicit  -> demand + ens - (wind + solar) + import (peak residual demand)
+    # capacity_target: 59711.6 # implicit -> demand + ens - (wind + solar)
+    price_target: 80000.0    # €/MW (price target for zone A)
     capacity_margin: 0.15     # 20% capacity margin
     min_price: -10000000
     max_price: 10000000
     D: "A" #
   B:
-    capacity_target: 9941.73 # 8402.08 + 1539.650173
-    # capacity_target: 10500
-    # capacity_target: 15000 # peak load
-    price_target: 180000.0
+    capacity_target: 15045.7
+    # capacity_target: 12804.5 
+    price_target: 70000.0
     capacity_margin: 0.15
     min_price: -10000000
     max_price: 10000000
     D: "B"
   C:
-    capacity_target: 15306.93 #11046.68 + 4260.249995
-    capacity_target: 16500
-    capacity_target: 20000 # peak load
-    price_target: 180000.0
+    capacity_target: 18175.3
+    # capacity_target: 16481.0 
+    price_target: 60000.0
     capacity_margin: 0.15
     min_price: -10000000
     max_price: 10000000

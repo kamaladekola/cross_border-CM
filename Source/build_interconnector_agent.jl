@@ -4,7 +4,6 @@ function build_interconnector_agent!(mod::Model)
     JZ = mod.ext[:sets][:JZ]           # zones
     JL = mod.ext[:sets][:JL]           # lines
     JN = mod.ext[:sets][:JN]           # nodes
-
     
     nodes = mod.ext[:parameters][:nodes] 
     W = mod.ext[:parameters][:w]             # hour weights
@@ -25,7 +24,6 @@ function build_interconnector_agent!(mod::Model)
     zone_syms    = mod.ext[:parameters][:zone_syms] 
     zone_of_idx = mod.ext[:parameters][:zone_of_idx]
 
-
     # net-position variable g[t,z] --> positive => import
     g = mod.ext[:variables][:g] = @variable(mod, g[jh=JH,jz=JZ], base_name = "netposition") # change to nodal aggregation
     g_red = mod.ext[:variables][:redispatch] = @variable(mod, g_red[jh in JH, jn in JN], base_name = "redispatch")
@@ -37,6 +35,7 @@ function build_interconnector_agent!(mod::Model)
 
     ens_IC = mod.ext[:expressions][:ens_IC] = @expression(mod, [jh in JH, jn in JN], ens_pos[jh,jn] - ens_neg[jh,jn])
     # ens_IC = mod.ext[:variables][:ens_IC] = @variable(mod, [jh in JH, jn in JN], base_name = "ens_IC")
+
 
     # Objective
     mod.ext[:objective] = @objective(mod, Min, 

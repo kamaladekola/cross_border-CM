@@ -67,15 +67,16 @@ function build_capacityIC_agent!(mod::Model)
     ## thermal limit
     mod.ext[:constraints][:thermal_limit] = @constraint(mod, [js in JS, jl in JL], -BRANCHES[jl][3] <= flow_cm[js,jl] <= BRANCHES[jl][3])
 
-    # netposition = exports + imports (negative netposition --> export) 
-    mod.ext[:constraints][:cap_cm_netposition] = @constraint(mod, [js in JS, jz in JZ],
-        cap_cm[jz] ==
-          sum(ex_cm[js,t] for t in TCONNECT if t[2] == zone_syms[jz])
-          - sum(ex_cm[js,t] for t in TCONNECT if t[1] == zone_syms[jz])
-          )
-    # ## netposition = exports + imports (negative netposition --> export) 
+    # # netposition = exports + imports (negative netposition --> export) 
     # mod.ext[:constraints][:cap_cm_netposition] = @constraint(mod, [js in JS, jz in JZ],
-    #     cap_cm[jz] == 0) # set this for implict CM and no cm
+    #     cap_cm[jz] ==
+    #       sum(ex_cm[js,t] for t in TCONNECT if t[2] == zone_syms[jz])
+    #       - sum(ex_cm[js,t] for t in TCONNECT if t[1] == zone_syms[jz])
+    #       )
+          
+    # ## netposition = exports + imports (negative netposition --> export) 
+    mod.ext[:constraints][:cap_cm_netposition] = @constraint(mod, [js in JS, jz in JZ],
+        cap_cm[jz] == 0) # set this for implict CM and no cm
     # netposition = exports + imports (negative netposition --> export) 
 
 
@@ -85,16 +86,16 @@ function build_capacityIC_agent!(mod::Model)
         mod.ext[:constraints][:cap_cm_nodal_balance] = @constraint(mod, [js in JS, jl in JL],
             flow_cm[js,jl] == sum(nodal_PTDF[jl, jn] * (g_scarcity[js,jn] - demand[js,jn] + ens_cm[js,jn]) for jn in JN))
 
-        mod.ext[:constraints][:cap_cm_global_balance] = @constraint(mod, [js in JS],
-            0 == sum((g_scarcity[js,jn] - demand[js,jn] + ens_cm[js,jn]) for jn in JN))
+        # mod.ext[:constraints][:cap_cm_global_balance] = @constraint(mod, [js in JS],
+        #     0 == sum((g_scarcity[js,jn] - demand[js,jn] + ens_cm[js,jn]) for jn in JN))
 
     elseif coupling == "ATC"     # each border is independently constrained by ATC 
         # ATC constraints
 
-        mod.ext[:constraints][:zonal_balance] = @constraint(mod, [js in JS, jz in JZ],
-        sum(g_scarcity[js,jn] for jn in JN if zone_of_idx[jn] == jz)
-        + sum(ens_cm[js,jn] for jn in JN if zone_of_idx[jn] == jz)
-        + cap_cm[jz] == sum(demand[js,jn] for jn in JN if zone_of_idx[jn] == jz))
+        # mod.ext[:constraints][:zonal_balance] = @constraint(mod, [js in JS, jz in JZ],
+        # sum(g_scarcity[js,jn] for jn in JN if zone_of_idx[jn] == jz)
+        # + sum(ens_cm[js,jn] for jn in JN if zone_of_idx[jn] == jz)
+        # + cap_cm[jz] == sum(demand[js,jn] for jn in JN if zone_of_idx[jn] == jz))
         
         mod.ext[:constraints][:cap_cm_atc_limit] = @constraint(mod, [js in JS, t in TCONNECT], 
             ATC[js][t][2] <= ex_cm[js,t] <= ATC[js][t][1])

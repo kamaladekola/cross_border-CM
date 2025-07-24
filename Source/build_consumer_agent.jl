@@ -16,7 +16,7 @@ function build_consumer_agent!(mod::Model, m::String, zones::Vector{String})
     CD_margin = mod.ext[:parameters][:CD_margin]      # capacity demand margin
     σ_CM = mod.ext[:parameters][:σ_CM]                # 1 if capacity markets are active, 0 otherwise
     # D_max = mod.ext[:parameters][:D_max]            # maximum demand (can be used in place of CD)
-    # WTP_CM = mod.ext[:parameters][:WTP_CM]          # Willingness to pay for capacity in the CM (price target)
+    WTP_CM = mod.ext[:parameters][:WTP_CM]          # Willingness to pay for capacity in the CM (price target)
 
     # ADMM parameters
     λ_EOM = mod.ext[:parameters][:λ_EOM]            # EOM prices
@@ -45,6 +45,7 @@ function build_consumer_agent!(mod::Model, m::String, zones::Vector{String})
     neg_utility = mod.ext[:expressions][:utility] = @expression(mod,                                                                                           
     sum(W[jh] * ((λ_EOM[jh] - WTP)*g_positive[jh] + (WTP/(2*ela*D[jh]))*(g_ela[jh])^2) for jh in JH)
     + σ_CM * sum(λ_CM[jz] * cap_cm[jz] * PM[m][zones[jz]] for jz in JZ) # should I add a willigness to pay for capacity market?
+    # + σ_CM * sum((λ_CM[jz] - WTP_CM) * cap_cm[jz] * PM[m][zones[jz]] for jz in JZ)
     # + sum(W[jh] * WTP * ens[jh] for jh in JH) # should I penalize unserved energy?
     )
 
@@ -71,7 +72,7 @@ function build_consumer_agent!(mod::Model, m::String, zones::Vector{String})
         if zones[jz] == z
             # for gh in timesteps
                 #  if lambda_eom > 300
-            mod.ext[:constraints][Symbol("CD_$jz")] = @constraint(mod, cap_cm[jz] >= σ_CM * PM[m][zones[jz]] * (1 - CD_margin) * CD)
+            mod.ext[:constraints][Symbol("CD_$jz")] = @constraint(mod, cap_cm[jz] >= σ_CM * PM[m][zones[jz]] * (1 + CD_margin) * CD)
             mod.ext[:constraints][Symbol("CD_upper_$jz")] = @constraint(mod, cap_cm[jz] <= σ_CM * PM[m][zones[jz]] * (1 + CD_margin) * CD)
         else
             mod.ext[:constraints][Symbol("CD_$jz")] = @constraint(mod, cap_cm[jz] >= 0.0)

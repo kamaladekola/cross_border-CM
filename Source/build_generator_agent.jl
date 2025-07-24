@@ -15,8 +15,6 @@ function build_generator_agent!(mod::Model, m::String, zones::Vector{String})
     node_share = mod.ext[:parameters][:node_share]
     nodes= mod.ext[:parameters][:nodes]
 
-
-
     A = mod.ext[:parameters][:A] 
     B = mod.ext[:parameters][:B]  
     λ_EOM = mod.ext[:parameters][:λ_EOM]                # EOM prices

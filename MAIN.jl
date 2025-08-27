@@ -24,6 +24,12 @@ end
 # Pkg.add("ProgressBars")
 # Pkg.add("TimerOutputs")
 # Pkg.add("ArgParse")
+# Pkg.add("JuMP")
+# Pkg.add("Gurobi")
+# Pkg.add("CSV")
+# Pkg.add("YAML")
+# Pkg.add("DataFrames")
+# Pkg.add("JLD2") # for saving workspace
 
 # Include packages 
 using JuMP, Gurobi # Optimization packages

@@ -99,7 +99,7 @@ function build_capacityIC_agent!(mod::Model)
             sum(ex_cm[js,t] for t in TCONNECT if t[2] == zone_syms[jz])
             - sum(ex_cm[js,t] for t in TCONNECT if t[1] == zone_syms[jz])
             ) 
-#  no redispatch in the ATC case
+#  no redispatch in the ATC case and no scenarios
         mod.ext[:constraints][:cap_cm_atc_limit] = @constraint(mod, [js in JS, t in TCONNECT], 
             ATC[js][t][2] <= ex_cm[js,t] <= ATC[js][t][1])
     end

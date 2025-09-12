@@ -3,7 +3,7 @@ General:
   nReprDays: 1 # days
   nDays: 365 # days
   nYears: 1 # years
-  # sigmaCM: 0 # CM switch
+  sigmaCM: 0 # CM switch
 
 ADMM:
   rho_EOM: 1 # rho ADMM penalty term, EOM
@@ -18,26 +18,26 @@ EOM:
 
 Consumers: # consumers by zones
   A:
-    WTP: 4000.0 # Max clearing price (€/MWh)
+    WTP: 10000.0 # Max clearing price (€/MWh)
     D: "A" # Demand timeseries that needs to be picked up
-    ela: 0.08 # fraction of demand that is elastic # 0.08 at WTP = 4000, 0.4 at WTP = 20000
+    ela: 0.2 # fraction of demand that is elastic # 0.08 at WTP = 4000, 0.2 at WTP = 10000
     sigmaCM: 0 # if 0, change scarcity data to 0
     NodeShare:
-        n1: 0.50
-        n2: 0.50
+        n1: 0.7
+        n2: 0.3
 
   B:
-    WTP: 4000.0 # Max clearing price (€/MWh)
+    WTP: 10000.0 # Max clearing price (€/MWh)
     D: "B" # Timeseries that needs to be picked up
-    ela: 0.08 # fraction of demand that is elastic
+    ela: 0.2 # fraction of demand that is elastic
     sigmaCM: 0
     NodeShare:
         n3: 1.0
 
   C:
-    WTP: 4000.0 # Max clearing price (€/MWh)
+    WTP: 10000.0 # Max clearing price (€/MWh)
     D: "C" # Timeseries that needs to be picked up
-    ela: 0.08 # fraction of demand that is elastic
+    ela: 0.2 # fraction of demand that is elastic
     sigmaCM: 0
     NodeShare:
         n4: 1.0
@@ -53,8 +53,8 @@ Generators:
       max_cap: 100000 # MW - maximum capacity
       sigmaCM: 1
       NodeShare:
-          n1: 0.50
-          n2: 0.50
+          n1: 0.5
+          n2: 0.5
 
     MidMerit:
       a: 0.0032 # (€/MWh)^2
@@ -64,8 +64,8 @@ Generators:
       max_cap: 100000 # MW - maximum capacity
       sigmaCM: 1
       NodeShare:
-          n1: 0.50
-          n2: 0.50
+          n1: 0.5
+          n2: 0.5
 
     Peak:
       a: 0.008 # (€/MWh)^2
@@ -75,8 +75,8 @@ Generators:
       max_cap: 100000 # MW - maximum capacity
       sigmaCM: 1
       NodeShare:
-          n1: 0.50
-          n2: 0.50
+          n1: 0.5
+          n2: 0.5
 
     WindOnshore:
       a: 0 # (€/MWh)^2
@@ -87,8 +87,8 @@ Generators:
       AF: "A"
       sigmaCM: 0
       NodeShare:
-          n1: 0.50
-          n2: 0.50
+          n1: 0.5
+          n2: 0.5
     PV:
       a: 0 # (€/MWh)^2
       b: 0 # €/MWh
@@ -98,8 +98,8 @@ Generators:
       AF: "A"
       sigmaCM: 0
       NodeShare:
-          n1: 0.50
-          n2: 0.50
+          n1: 0.5
+          n2: 0.5
   B:
     Baseload:
       a: 0.008 # (€/MWh)^2
@@ -250,5 +250,7 @@ Network:
   ptdf: "ptdf"  # PTDF dataframe
   nodal_ptdf: "nodal_ptdf"  # nodal PTDF dataframe
   coupling: "FB"  # or "FB" or "ATC"
+  IC_reserve: 500000 # €/MW-year higher than the highest fixed cost
+  MC_reserve: 20000 # €/MWh higher than voll
 
 

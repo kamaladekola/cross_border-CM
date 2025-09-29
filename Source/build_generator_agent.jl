@@ -53,6 +53,8 @@ function build_generator_agent!(mod::Model, m::String, zones::Vector{String})
         + σ_CM * ρ_CM[home_zone]/2 * (sum(cap_cm[jz] * PM[m][zones[jz]] for jz in JZ) - cap_bar[home_zone])^2 # ADMM penalty term for CM when all capacity in a zone is remunerated at the same price
     )
 
+    
+
     # # aggregate nodal to zone level
     mod.ext[:constraints][:g_link] = @constraint(mod, [jh in JH, jn in JN],
     g_nodal[jh,jn] == get(node_share, nodes[jn], 0.0) * g[jh])

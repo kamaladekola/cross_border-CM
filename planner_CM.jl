@@ -58,6 +58,11 @@ struct Params
     S::Matrix{Float64} # Z × N (demand share per zone-node)
     PTDF::Matrix{Float64} # L × N (power transfer distribution factors)
     Fmax::Vector{Float64} # L (thermal limits)
+
+    # # CM parameters 
+    # CD::Vector{Float64} # capacity demand per zone
+    # DF::Matrix{Float64} # I × N derating factors for capacity
+    # scarcity_demand::Matrix{Float64} # S × Z demand in scarcity scenarios
 end
 
 function read_inputs(base_dir::AbstractString)
@@ -151,6 +156,7 @@ function define_parameters(data, load, pv, wind_on, nptdf, lines, weights, sets:
     for (zidx, z) in enumerate(sets.zones)
         D_zonal[:, zidx] = Float64.(safe_col(load, z))[1:H]
     end
+
 
 
     # elastic/price parameters per zone
@@ -276,6 +282,16 @@ function build_planner_eom(; data, load, pv, wind_on, nodal_ptdf_df, lines, weig
     @variable(model, d_inel[JH, JZ] >= 0)
     @variable(model, d_ela[JH, JZ]  >= 0)
 
+    ### CM variables
+
+    # @variable(model, cap_cm[JI, JZ] >= 0)           # capacity sold in CM per technology per zone
+    # @variable(model, cap_cm_bar[JI, JN] >= 0)       # capacity sold in CM at nodal level
+    # @variable(model, g_cm[JS, JI, JN] >= 0)         # capacity deployed at nodal level in scarcity
+    # @variable(model, r_cm[JS, JN])                  # nodal net position in CM scenarios
+    # @variable(model, f_cm[JS, JL])                  # line flows in CM scenarios
+    # @variable(model, p_cm[JS, JZ])                  # zonal net positions in CM scenarios
+
+
     # negative utility function per zone
     function consumer_utility(t, z)
         w = WTP[z]
@@ -342,6 +358,37 @@ function build_planner_eom(; data, load, pv, wind_on, nodal_ptdf_df, lines, weig
 
     # zonal capacity limits
     zonal_cap = @constraint(model, [t in JH, i in JI, z in JZ], g[t, i, z] <= AV[t, i, z] * (y[i, z] + sum(y_node[i, n] for n in JN if zone_of_node[n] == z)))
+
+    ### capacity market constraints
+
+    # # Capacity sold in CM in zone z <= installed capacity in zone z
+    # cm_cap = @constraint(model, [i in JI, z in JZ], cap_cm[i, z] <= y[i, z] + sum(y_node[i, n] for n in JN if zone_of_node[n] == z))
+    # # Capacity sold >= capacity demand in zone z
+    # cm_req = @constraint(model, [z in JZ], sum(cap_cm[i, z] for i in JI) >= CD[z])
+
+    # # capacity net position in CM = sum of nodal capacity net positions in CM
+    # cm_agg = @constraint(model, [s in JS, z in JZ], p_cm[s, z] == sum(r_cm[s, n] for n in JN if zone_of_node[n] == z))
+
+    # # nodal capacity net position in CM = sum of nodal capacity generation in CM - sum of nodal capacity demand in CM
+    # cm_nbal = @constraint(model, [s in JS, n in JN], r_cm[s, n] == sum(g_cm[s, i, n] for i in JI) - scarcity_demand[s, zone_of_node[n]] * S[zone_of_node[n], n])
+
+    # # nodal capacity generation in CM <= derated capacity offer in CM
+    # cm_gen = @constraint(model, [s in JS, i in JI, n in JN], g_cm[s, i, n] <= DF[i, n] * cap_cm_bar[i, n])
+
+    # # nodal capacity generation in CM <= nodal capacity offer in CM
+    # cm_node = @constraint(model, [s in JS, i in JI, n in JN], sum(g_cm[s, i, n] for i in JI) <=  sum(cap_cm_bar[i, n] for i in JI))
+    # # Link between zonal and nodal capacity in CM -> sum of nodal capacity offer in CM == zonal capacity offer in CM
+    # cm_alloc = @constraint(model, [i in JI, z in JZ], cap_cm[i, z] == sum(cap_cm_bar[i, n] for n in JN if zone_of_node[n] == z)) 
+
+    # # DC power flow for power delivery during scarcity scenario in CM
+    # cm_fmap = @constraint(model, [s in JS, l in JL], f_cm[s, l] == sum(PTDF[l, n] * r_cm[s, n] for n in JN))
+
+    # # Thermal limits in scarcity scenarios
+    # cm_therm = @constraint(model, [s in JS, l in JL], -Fmax[l] <= f_cm[s, l] <= Fmax[l])
+
+    # # System balance in scarcity scenarios -> sum of nodal net positions in CM == 0
+    # cm_sbal = @constraint(model, [s in JS], sum(r_cm[s, n] for n in JN) == 0)
+
 
     # store metadata as a Dict — JuMP.Model expects model.ext to be a Dict-like object
     model.ext = Dict{Symbol,Any}(

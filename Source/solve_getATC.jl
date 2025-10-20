@@ -9,9 +9,12 @@ function solve_getATC!(mod::Model)
     nodes = mod.ext[:parameters][:nodes]
     nodal_PTDF = mod.ext[:parameters][:nodal_PTDF]
     CapCM_nodal = mod.ext[:parameters][:CapCM_nodal]
-    zone_of = mod.ext[:parameters][:zone_of]
+    zone_of_node = mod.ext[:parameters][:zone_of_node]
     d_scarcity  = mod.ext[:parameters][:d_scarcity] 
     Cap_Demand_nodal = mod.ext[:parameters][:Cap_Demand_nodal]
+    reserve_cost = mod.ext[:parameters][:reserve_cost]
+
+    epsilon = 1e-8
 
     TCONNECT = mod.ext[:parameters][:TCONNECT]
     atc_plus  = mod.ext[:variables][:atc_plus]
@@ -21,11 +24,7 @@ function solve_getATC!(mod::Model)
     v_redispatch = mod.ext[:variables][:v_redispatch]
     f = mod.ext[:variables][:f]
     net_pos = mod.ext[:variables][:net_pos]
-    s_pos = mod.ext[:variables][:s_pos]
-    s_neg = mod.ext[:variables][:s_neg]
-    epsilon = 1e-8
-    M = 1e10
-
+    reserve = mod.ext[:variables][:network_reserve]
 
     atc_results = Dict{Int,Dict{Tuple{Symbol,Symbol},Tuple{Float64,Float64}}}()
 
@@ -35,15 +34,9 @@ function solve_getATC!(mod::Model)
         demand = mod.ext[:expressions][:v_demand] = @expression(mod, [jn in JN],
             d_scarcity[js, jn] * Cap_Demand_nodal[jn])
 
-        # demand = mod.ext[:expressions][:demand] = @expression(mod, [jn in JN],
-        #     d_scarcity[js, jn] * CapCM_nodal[jn])
-
-        ens = mod.ext[:expressions][:ens_atc] = @expression(mod, [jn=JN], s_pos[jn] - s_neg[jn])
-
-
         mod.ext[:objective] = @objective(mod, Max, sum(atc_plus[t] + atc_minus[t] for t in TCONNECT)
         - epsilon * sum(atc_plus[t]^2 + atc_minus[t]^2 for t in TCONNECT)
-        - M * sum((s_pos[jn] + s_neg[jn]) for jn in JN)
+        - reserve_cost * sum(reserve[jn] for jn in JN)
         )
 
 
@@ -51,26 +44,23 @@ function solve_getATC!(mod::Model)
             delete(mod, mod.ext[:constraints][:getATC_nodal_balance][jv, jl])
         end
         mod.ext[:constraints][:getATC_nodal_balance] = @constraint(mod, [jv in JV, jl in JL],
-        f[jv,jl] == sum(nodal_PTDF[jl, jn] * (CapCM_nodal[jn] * (v_dayahead[jv,jn] + v_redispatch[jv,jn]) - demand[jn]  + ens[jn]) for jn in JN))
-        # f[jv,jl] == sum(nodal_PTDF[jl, jn] * ((CapCM_nodal[jn]) * (v_dayahead[jv,jn] + v_redispatch[jv,jn]) - demand[jn]) for jn in JN))
+        f[jv,jl] == sum(nodal_PTDF[jl, jn] * (CapCM_nodal[jn] * (v_dayahead[jv,jn] + v_redispatch[jv,jn]) + reserve[jn] - demand[jn]) for jn in JN))
 
         for jv in JV, (jz, zsym) in enumerate(zone_syms)
             delete(mod, mod.ext[:constraints][:getATC_zonal_balance][jv, (jz, zsym)])
         end
 
         mod.ext[:constraints][:getATC_zonal_balance] = @constraint(mod, [jv in JV, (jz, zsym) in enumerate(zone_syms)],
-            sum((CapCM_nodal[jn]) * v_dayahead[jv,jn] for jn in JN if zone_of[nodes[jn]] == zsym)
-            # - net_pos[jv,jz] == sum(demand[jn] for jn in JN if zone_of[nodes[jn]] == zsym))
-            - net_pos[jv,jz] == sum(demand[jn] - ens[jn] for jn in JN if zone_of[nodes[jn]] == zsym))
-
+        sum(CapCM_nodal[jn] * v_dayahead[jv,jn] for jn in JN if zone_of_node[nodes[jn]] == zsym)
+        - net_pos[jv,jz] == sum(demand[jn] - reserve[jn]  for jn in JN if zone_of_node[nodes[jn]] == zsym)
+        )
 
         for jv in JV, (jz, zsym) in enumerate(zone_syms)
             delete(mod, mod.ext[:constraints][:getATC_redispatch_limit][jv, (jz, zsym)])
         end
         mod.ext[:constraints][:getATC_redispatch_limit] =
-            @constraint(mod, [jv in JV, (jz, zsym) in enumerate(zone_syms)],
-            sum((CapCM_nodal[jn]) * v_redispatch[jv,jn] for jn in JN if zone_of[nodes[jn]] == zsym) == 0)
-            # sum((CapCM_nodal[jn]) * v_redispatch[jv,jn] for jn in JN if zone_of[nodes[jn]] == zsym) == 0)
+        @constraint(mod, [jv in JV, (jz, zsym) in enumerate(zone_syms)],
+        sum((CapCM_nodal[jn]) * v_redispatch[jv,jn] for jn in JN if zone_of_node[nodes[jn]] == zsym) == 0)
 
         optimize!(mod)
 

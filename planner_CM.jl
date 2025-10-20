@@ -29,11 +29,13 @@ Z::Int
 N::Int
 I::Int
 L::Int
+S::Int
 JH::UnitRange{Int}
 JZ::UnitRange{Int}
 JN::UnitRange{Int}
 JI::UnitRange{Int}
 JL::UnitRange{Int}
+JS::UnitRange{Int}
 zones::Vector{String}
 nodes::Vector{Symbol}
 techs::Vector{Symbol}
@@ -59,10 +61,9 @@ struct Params
     PTDF::Matrix{Float64} # L × N (power transfer distribution factors)
     Fmax::Vector{Float64} # L (thermal limits)
 
-    # # CM parameters 
-    # CD::Vector{Float64} # capacity demand per zone
-    # DF::Matrix{Float64} # I × N derating factors for capacity
-    # scarcity_demand::Matrix{Float64} # S × Z demand in scarcity scenarios
+    # CM parameters 
+    CD::Vector{Float64} # capacity demand per zone
+    scarcity_matrix::Matrix{Float64} # S × Z demand in scarcity scenarios
 end
 
 function read_inputs(base_dir::AbstractString)
@@ -72,6 +73,7 @@ function read_inputs(base_dir::AbstractString)
     wind_on = CSV.read(joinpath(base_dir, "Input", "wind_onshore.csv"), DataFrame; delim = ";")
     nptdf = CSV.read(joinpath(base_dir, "Input", "nodal_ptdf.csv"), DataFrame; delim = ";")
     lines = CSV.read(joinpath(base_dir, "Input", "lines.csv"), DataFrame; delim = ";")
+    scarcity_df = CSV.read(joinpath(base_dir, "Input", "scarcity.csv"), DataFrame; delim = ";")
 
 
     H = Int(data["General"]["nTimesteps"])
@@ -85,7 +87,7 @@ function read_inputs(base_dir::AbstractString)
 
 
     return (data=data, load=load, pv=pv, wind_on=wind_on,
-    nptdf=nptdf, lines=lines, weights=W)
+    nptdf=nptdf, lines=lines, weights=W, scarcity=scarcity_df)
 end
 
 function collect_zones(data)
@@ -105,7 +107,7 @@ function collect_techs(data)
     return Symbol.(tech_names)
 end
 
-function build_sets_and_maps(data, lines::DataFrame)
+function build_sets_and_maps(data, lines::DataFrame, scarcity_df::DataFrame)
     zones = collect_zones(data)
     techs = collect_techs(data)
     zone_nodes = Dict{String,Vector{Symbol}}(z => Symbol.(data["Network"]["ZoneMap"][z]) for z in zones)
@@ -114,7 +116,7 @@ function build_sets_and_maps(data, lines::DataFrame)
 
     H = Int(data["General"]["nTimesteps"]) ; Z = length(zones) ; N = length(nodes)
     I = length(techs) ; L = nrow(lines)
-
+    S = nrow(scarcity_df)
 
     zone_to_idx = Dict(z => i for (i, z) in enumerate(zones))
     tech_to_idx = Dict(techs[i] => i for i in 1:I)
@@ -142,13 +144,13 @@ function build_sets_and_maps(data, lines::DataFrame)
     end
 
 
-    sets = Sets(H, Z, N, I, L, 1:H, 1:Z, 1:N, 1:I, 1:L, zones, nodes, techs)
+    sets = Sets(H, Z, N, I, L, S, 1:H, 1:Z, 1:N, 1:I, 1:L, 1:S, zones, nodes, techs)
     maps = Maps(zone_of_node, zone_to_idx, tech_to_idx, zone_nodes_idx)
     return sets, maps
 end
 
 
-function define_parameters(data, load, pv, wind_on, nptdf, lines, weights, sets::Sets, maps::Maps)
+function define_parameters(data, load, pv, wind_on, nptdf, lines, weights, scarcity_df, sets::Sets, maps::Maps)
     H, Z, N, I, L = sets.H, sets.Z, sets.N, sets.I, sets.L
 
     # demand per zone
@@ -256,22 +258,31 @@ function define_parameters(data, load, pv, wind_on, nptdf, lines, weights, sets:
     Fmax = Float64.(safe_col(lines, :Fmax))
     @assert size(PTDF,1) == L "PTDF rows must match number of lines"
 
-    return Params(Float64.(weights[1:H]), D_zonal, AV, y_node, MC, max_cap, A, IC, S, PTDF, Fmax), ela, WTP
+    # Capacity demand per zone
+    CD = zeros(Float64, sets.Z)
+    for (zidx, z) in enumerate(sets.zones)
+        CD[zidx] = Float64(get_any(data["CM"][z], "capacity_target"))
+    end
+
+    scarcity_matrix = Matrix{Float64}(scarcity_df[:, sets.zones])
+
+    return Params(Float64.(weights[1:H]), D_zonal, AV, y_node, MC, max_cap, A, IC, S, PTDF, Fmax, CD, scarcity_matrix), ela, WTP
 end
 
-function build_planner_eom(; data, load, pv, wind_on, nodal_ptdf_df, lines, weights)
-    sets, maps = build_sets_and_maps(data, lines)
-    params, ela, WTP = define_parameters(data, load, pv, wind_on, nodal_ptdf_df, lines, weights, sets, maps)
+function build_planner_cm(; data, load, pv, wind_on, nodal_ptdf_df, lines, weights, scarcity_df)
+    sets, maps = build_sets_and_maps(data, lines, scarcity_df)
+    params, ela, WTP = define_parameters(data, load, pv, wind_on, nodal_ptdf_df, lines, weights, scarcity_df, sets, maps)
 
     model = Model(optimizer_with_attributes(Gurobi.Optimizer, "OutputFlag"=>0))
 
-    H, Z, N, I, L = sets.H, sets.Z, sets.N, sets.I, sets.L
-    JH, JZ, JN, JI, JL = sets.JH, sets.JZ, sets.JN, sets.JI, sets.JL
+    H, Z, N, I, L, S = sets.H, sets.Z, sets.N, sets.I, sets.L, sets.S
+    JH, JZ, JN, JI, JL, JS = sets.JH, sets.JZ, sets.JN, sets.JI, sets.JL, sets.JS
     W, D_zonal, AV, y_node = params.W, params.D_zonal, params.AV, params.y_node
     MC, max_cap, A, IC, PTDF, Fmax, S = params.MC, params.max_cap, params.A, params.IC, params.PTDF, params.Fmax, params.S
+    CD, scarcity_matrix = params.CD, params.scarcity_matrix
     zone_of_node = maps.zone_of_node
    
-    # Variables
+    # EOM Variables
     @variable(model, y[JI, JZ] >= 0)
     @variable(model, y_bar[JI, JN] >= 0)
     @variable(model, g[JH, JI, JZ] >= 0)
@@ -281,15 +292,15 @@ function build_planner_eom(; data, load, pv, wind_on, nodal_ptdf_df, lines, weig
     @variable(model, p[JH, JZ])
     @variable(model, d_inel[JH, JZ] >= 0)
     @variable(model, d_ela[JH, JZ]  >= 0)
+    @variable(model, ens[JH, JZ] >= 0)
 
     ### CM variables
-
-    # @variable(model, cap_cm[JI, JZ] >= 0)           # capacity sold in CM per technology per zone
-    # @variable(model, cap_cm_bar[JI, JN] >= 0)       # capacity sold in CM at nodal level
-    # @variable(model, g_cm[JS, JI, JN] >= 0)         # capacity deployed at nodal level in scarcity
-    # @variable(model, r_cm[JS, JN])                  # nodal net position in CM scenarios
-    # @variable(model, f_cm[JS, JL])                  # line flows in CM scenarios
-    # @variable(model, p_cm[JS, JZ])                  # zonal net positions in CM scenarios
+    @variable(model, cap_cm[JI, JZ] >= 0)           # capacity sold in CM per technology per zone
+    @variable(model, cap_cm_bar[JI, JN] >= 0)       # capacity sold in CM at nodal level
+    @variable(model, g_cm[JS, JI, JN] >= 0)         # capacity deployed at nodal level in scarcity
+    @variable(model, r_cm[JS, JN])                  # nodal net position in CM scenarios
+    @variable(model, f_cm[JS, JL])                  # line flows in CM scenarios
+    @variable(model, p_cm[JZ])                      # zonal capacity net positions
 
 
     # negative utility function per zone
@@ -303,8 +314,7 @@ function build_planner_eom(; data, load, pv, wind_on, nodal_ptdf_df, lines, weig
         end
     end
 
-    # ENS
-    @expression(model, ens[t in JH, z in JZ], (1-ela[z]) * D_zonal[t, z] - d_inel[t, z])
+ 
 
     # marginal cost + quadratic cost
     @expression(model, gen_cost,
@@ -322,12 +332,12 @@ function build_planner_eom(; data, load, pv, wind_on, nodal_ptdf_df, lines, weig
 
     # Constraints
 
-    # demand elasticity
-    @constraint(model, [t in JH, z in JZ], d_inel[t, z] <= (1 - ela[z]) * D_zonal[t, z])
+    # demand
+    @constraint(model, [t in JH, z in JZ], d_inel[t, z] == (1 - ela[z]) * D_zonal[t, z] - ens[t, z])
     @constraint(model, [t in JH, z in JZ], d_ela[t, z]  <=  ela[z] * D_zonal[t, z])
 
     # zonal balance constraints
-    bal = @constraint(model, bal[t in JH, z in JZ], -p[t, z] + sum(g[t, i, z] for i in JI) - (d_inel[t, z] + d_ela[t, z]) == 0)
+    bal = @constraint(model, bal[t in JH, z in JZ], -p[t, z] + sum(g[t, i, z] for i in JI) - (d_inel[t, z] + d_ela[t, z]) == 0) # imports negative
 
     # Aggregate nodal net positions to zonal net positions
     agg = @constraint(model, [t in JH, z in JZ], 
@@ -359,50 +369,68 @@ function build_planner_eom(; data, load, pv, wind_on, nodal_ptdf_df, lines, weig
     # zonal capacity limits
     zonal_cap = @constraint(model, [t in JH, i in JI, z in JZ], g[t, i, z] <= AV[t, i, z] * (y[i, z] + sum(y_node[i, n] for n in JN if zone_of_node[n] == z)))
 
-    ### capacity market constraints
+    ### capacity market constraints (Flow-based)
 
-    # # Capacity sold in CM in zone z <= installed capacity in zone z
-    # cm_cap = @constraint(model, [i in JI, z in JZ], cap_cm[i, z] <= y[i, z] + sum(y_node[i, n] for n in JN if zone_of_node[n] == z))
-    # # Capacity sold >= capacity demand in zone z
-    # cm_req = @constraint(model, [z in JZ], sum(cap_cm[i, z] for i in JI) >= CD[z])
+    # # zonal balance in CM -> capacity sold in CM per zone = capacity manager net position in CM + capacity demand in zone
+    cm_bal = @constraint(model, [z in JZ], sum(cap_cm[i, z] for i in JI) - CD[z] + p_cm[z] == 0) # imports positive
 
-    # # capacity net position in CM = sum of nodal capacity net positions in CM
-    # cm_agg = @constraint(model, [s in JS, z in JZ], p_cm[s, z] == sum(r_cm[s, n] for n in JN if zone_of_node[n] == z))
-
-    # # nodal capacity net position in CM = sum of nodal capacity generation in CM - sum of nodal capacity demand in CM
-    # cm_nbal = @constraint(model, [s in JS, n in JN], r_cm[s, n] == sum(g_cm[s, i, n] for i in JI) - scarcity_demand[s, zone_of_node[n]] * S[zone_of_node[n], n])
-
-    # # nodal capacity generation in CM <= derated capacity offer in CM
-    # cm_gen = @constraint(model, [s in JS, i in JI, n in JN], g_cm[s, i, n] <= DF[i, n] * cap_cm_bar[i, n])
-
-    # # nodal capacity generation in CM <= nodal capacity offer in CM
-    # cm_node = @constraint(model, [s in JS, i in JI, n in JN], sum(g_cm[s, i, n] for i in JI) <=  sum(cap_cm_bar[i, n] for i in JI))
-    # # Link between zonal and nodal capacity in CM -> sum of nodal capacity offer in CM == zonal capacity offer in CM
-    # cm_alloc = @constraint(model, [i in JI, z in JZ], cap_cm[i, z] == sum(cap_cm_bar[i, n] for n in JN if zone_of_node[n] == z)) 
-
-    # # DC power flow for power delivery during scarcity scenario in CM
-    # cm_fmap = @constraint(model, [s in JS, l in JL], f_cm[s, l] == sum(PTDF[l, n] * r_cm[s, n] for n in JN))
-
-    # # Thermal limits in scarcity scenarios
-    # cm_therm = @constraint(model, [s in JS, l in JL], -Fmax[l] <= f_cm[s, l] <= Fmax[l])
-
-    # # System balance in scarcity scenarios -> sum of nodal net positions in CM == 0
-    # cm_sbal = @constraint(model, [s in JS], sum(r_cm[s, n] for n in JN) == 0)
+    # # Capacity limits:
+    cm_cap = @constraint(model, [i in JI, n in JN], cap_cm_bar[i, n] <= y_bar[i, n])
+    
+    # Link between zonal and nodal capacity in CM -> sum of nodal capacity offer in CM == nodal capacity sold in CM
+    cm_alloc = @constraint(model, [i in JI, z in JZ], cap_cm[i, z] == sum(cap_cm_bar[i, n] for n in JN if zone_of_node[n] == z))
 
 
-    # store metadata as a Dict — JuMP.Model expects model.ext to be a Dict-like object
+    # nodal capacity generation in CM <= derated capacity offer in CM
+    # cm_gen = @constraint(model, [s in JS, i in JI, n in JN], g_cm[s, i, n] <= cap_cm_bar[i, n])
+    cm_gen = @constraint(model, [s in JS, i in JI, n in JN], g_cm[s, i, n] <= y_bar[i, n])
+
+
+    nodal_capacity_demand = @expression(model, [n in JN], S[zone_of_node[n], n] * CD[zone_of_node[n]])
+        
+    scarcity_demand = @expression(model, [s in JS, n in JN], scarcity_matrix[s, zone_of_node[n]] * nodal_capacity_demand[n])
+
+    # nodal balance
+    cm_nbal = @constraint(model, [s in JS, n in JN], r_cm[s, n] == sum(g_cm[s, i, n] for i in JI) - scarcity_demand[s, n])
+
+    # capacity net position in CM = sum of nodal capacity net positions in CM
+    cm_agg = @constraint(model, [s in JS, z in JZ], p_cm[z] >= - sum(r_cm[s, n] for n in JN if zone_of_node[n] == z))
+
+    # DC power flow for power delivery during scarcity scenario in CM
+    cm_fmap = @constraint(model, [s in JS, l in JL], f_cm[s, l] == sum(PTDF[l, n] * r_cm[s, n] for n in JN))
+
+    # Thermal limits in scarcity scenarios
+    cm_therm = @constraint(model, [s in JS, l in JL], -Fmax[l] <= f_cm[s, l] <= Fmax[l])
+
+    # System balance in scarcity scenarios -> sum of nodal net positions in CM == 0
+    cm_sbal = @constraint(model, [s in JS], sum(r_cm[s, n] for n in JN) == 0)
+    cm_gbal = @constraint(model, sum(p_cm[z] for z in JZ) == 0)
+
+    # Capacity market constraints (ATCMC)
+    # Add ATC parameter - # ATC = zeros(Float64, I, Z)
+    # -atc <=cap_cm <= atc
+    # atc = @constraint(model, [i in JI, z in JZ], -ATC[i, z] <= cap_cm[i, z] <= ATC[i, z])
+
+
     model.ext = Dict{Symbol,Any}(
         :sets => sets,
         :maps => maps,
         :params => params,
         :vars => Dict(
             :y => y, :y_bar => y_bar, :g => g, :g_bar => g_bar,
-            :r => r, :f => f, :p => p, :d_inel => d_inel, :d_ela => d_ela
+            :r => r, :f => f, :p => p, :d_inel => d_inel, :d_ela => d_ela,
+            :cap_cm => cap_cm, :cap_cm_bar => cap_cm_bar, :g_cm => g_cm, 
+            :r_cm => r_cm, :f_cm => f_cm, :p_cm => p_cm
         ),
         :constraint => Dict(
             :bal => bal, :agg => agg, :nbal => nbal, :cap => cap,
             :alloc => alloc, :fmap => fmap, :therm => therm, :sbal => sbal,
-            :zonal_cap => zonal_cap, :Ren_cap => Ren_cap
+            :zonal_cap => zonal_cap, :Ren_cap => Ren_cap,
+            :cm_bal => cm_bal, 
+            :cm_cap => cm_cap, :cm_alloc => cm_alloc,
+            :cm_gen => cm_gen, :cm_nbal => cm_nbal, :cm_agg => cm_agg,
+            :cm_fmap => cm_fmap, :cm_therm => cm_therm, 
+            :cm_sbal => cm_sbal, :cm_gbal => cm_gbal
         ),
         :scalars => Dict(:ela => ela, :WTP => WTP),
         :expressions => Dict(:ens => ens, :gen_cost => gen_cost, 
@@ -418,13 +446,14 @@ function solve_and_save(
     wind_on::DataFrame,
     nptdf::DataFrame,
     lines::DataFrame,
-    weights; 
-    output_dir = joinpath(@__DIR__, "Results", "Planner"),
+    weights,
+    scarcity_df::DataFrame;
+    output_dir = joinpath(@__DIR__, "Results", "Planner_CM"),
 )
     mkpath(output_dir)
 
     # Build and solve
-    model = build_planner_eom(;
+    model = build_planner_cm(;
         data=data,
         load=load,
         pv=pv,
@@ -432,6 +461,7 @@ function solve_and_save(
         nodal_ptdf_df=nptdf,
         lines=lines,
         weights=weights,
+        scarcity_df=scarcity_df,
     )
     optimize!(model)
 
@@ -447,11 +477,12 @@ function solve_and_save(
     params = ext[:params]
     expressions = ext[:expressions]
 
-    JH, JI, JZ, JN, JL = sets.JH, sets.JI, sets.JZ, sets.JN, sets.JL
+    JH, JI, JZ, JN, JL, JS = sets.JH, sets.JI, sets.JZ, sets.JN, sets.JL, sets.JS
     zones, nodes, techs = sets.zones, sets.nodes, sets.techs
 
     vars = ext[:vars]
-    @assert all(haskey(vars, s) for s in (:y, :y_bar, :g_bar, :p, :f, :d_inel, :d_ela)) "model.ext.vars is missing expected fields"
+    constraints = ext[:constraint]
+    @assert all(haskey(vars, s) for s in (:y, :y_bar, :g_bar, :p, :f, :d_inel, :d_ela, :cap_cm, :cap_cm_bar, :g_cm, :p_cm)) "model.ext.vars is missing expected fields"
 
     y_var     = vars[:y]        # (I,Z)   installed zonal capacity
     ybar_var  = vars[:y_bar]    # (I,N)   nodal allocation of new capacity
@@ -461,6 +492,10 @@ function solve_and_save(
     f_var     = vars[:f]        # (H,L)   line flows
     dinel_var = vars[:d_inel]   # (H,Z)   inelastic demand served
     dela_var  = vars[:d_ela]    # (H,Z)   elastic demand served
+    capcm_var = vars[:cap_cm]      # (I,Z)   capacity sold in CM per technology per zone
+    capcmbar_var = vars[:cap_cm_bar]  # (I,N)   capacity sold in CM at nodal level
+    gcm_var   = vars[:g_cm]        # (S,I,N) capacity deployed at nodal level in scarcity
+    pcm_var   = vars[:p_cm]        # (Z)     zonal capacity net positions
 
 
     capacity     = value.(y_var)
@@ -471,12 +506,18 @@ function solve_and_save(
     flow     = value.(f_var)
     inel   = value.(dinel_var)
     elastic  = value.(dela_var)
+    cap_cm   = value.(capcm_var)
+    cap_cm_bar = value.(capcmbar_var)
+    # println(cap_cm_bar)
+    gen_cm   = value.(gcm_var)
+    pos_cm   = value.(pcm_var)
 
     # Zonal prices (€/MWh) from balance duals, unweighted
     W = params.W
-    rho = [dual(ext[:constraint][:bal][t, z]) / W[t] for t in JH, z in JZ]
+    rho = [dual(constraints[:bal][t, z]) / W[t] for t in JH, z in JZ]
+    cm_price = [dual(constraints[:cm_bal][z]) for z in JZ]
     # extract dual of alloc
-    dual_alloc = [dual(ext[:constraint][:alloc][i, z]) for i in JI, z in JZ] # show the dataframe in the terminal
+    dual_alloc = [dual(constraints[:alloc][i, z]) for i in JI, z in JZ] # show the dataframe in the terminal
     println(DataFrame(dual_alloc, :auto))
 
     # Existing capacity C[i,z] from input data (for totals)
@@ -488,12 +529,17 @@ function solve_and_save(
         end
     end
 
-
+    # Calculate total capacity offered per zone
+    total_cap_offer = [sum(cap_cm[i, z] for i in JI) for z in JZ]
+    capacity_manager = [pos_cm[z] for z in JZ] # Zonal capacity net positions
+    
 
     for z in zones
         zidx = maps.zone_to_idx[z]
         df = DataFrame(Timestep = collect(JH))
         df.EOM_price = rho[:, zidx]
+        df[!, :CM_price] = fill(cm_price[zidx], length(JH))
+        df[!, :TotalCapOffer] = fill(total_cap_offer[zidx], length(JH))
 
             # Get zonal generation per tech
             for tech in techs
@@ -502,7 +548,7 @@ function solve_and_save(
                 tstr = String(tech)
                 df[!, Symbol("Gen_$(z)_$(tstr)")]                = gen_t
                 df[!, Symbol("new_Capacity_Gen_$(z)_$(tstr)")]   = fill(capacity[i, zidx], length(JH))
-                df[!, Symbol("total_capacity_Gen_$(z)_$(tstr)")] = fill(Cz[i, zidx] + capacity[i, zidx], length(JH))
+                df[!, Symbol("Capacity_Gen_$(z)_$(tstr)")] = fill(Cz[i, zidx] + capacity[i, zidx], length(JH))
             end
 
         cons_total = inel[:, zidx] .+ elastic[:, zidx]
@@ -511,7 +557,8 @@ function solve_and_save(
         df[!, Symbol("Cons_$(z)")]           = cons_total
         df[!, Symbol("Inelastic_Cons_$(z)")] = inel[:, zidx]
         df[!, Symbol("Elastic_Cons_$(z)")]   = elastic[:, zidx]
-        df[!, :NetworkManager]               = net_pos[:, zidx]
+        df[!, :NetworkManager]               = -1 * net_pos[:, zidx] # imports positive
+        df[!, :CapacityManager] = fill(capacity_manager[zidx], length(JH))
         df[!, Symbol("ENS_Cons_$(z)")]       = ens
 
 
@@ -521,7 +568,7 @@ function solve_and_save(
             end
         end
 
-        CSV.write(joinpath(output_dir, "zone_$(z).csv"), df)
+        CSV.write(joinpath(output_dir, "planner_zone_$(z).csv"), df, delim=";")
     end
 
     price_df = DataFrame(Timestep = collect(JH))
@@ -547,6 +594,13 @@ function solve_and_save(
         Generation = vec(aux_dispatch),
     )
 
+    cm_results_df = DataFrame(
+        Zone = zones,
+        CM_price = [cm_price[maps.zone_to_idx[z]] for z in zones],
+        TotalCapOffer = [total_cap_offer[maps.zone_to_idx[z]] for z in zones],
+        CapacityManager = [capacity_manager[maps.zone_to_idx[z]] for z in zones]
+    )
+
 
     flow_df = DataFrame(Timestep = repeat(collect(JH), outer = sets.L))
     line_ids = :line_id ∈ names(lines) ? lines[!, :line_id] : 1:nrow(lines)
@@ -561,11 +615,22 @@ function solve_and_save(
         :nodal_investments_df => nodal_invest_df,
         :dispatch_df          => dispatch_df,
         :flows_df             => flow_df,
+        :cm_results_df        => cm_results_df,
         :out_dir              => output_dir,
         :model                => model,
     )
 end
 
 inputs = read_inputs(@__DIR__)
-cp_eom = solve_and_save(inputs.data, inputs.load, inputs.pv, inputs.wind_on, inputs.nptdf, inputs.lines, inputs.weights; output_dir=joinpath(@__DIR__, "Results", "Planner"))
-@show objective_value(cp_eom[:model])
+cp_cm = solve_and_save(
+    inputs.data, 
+    inputs.load, 
+    inputs.pv, 
+    inputs.wind_on, 
+    inputs.nptdf, 
+    inputs.lines, 
+    inputs.weights,
+    inputs.scarcity;
+    output_dir=joinpath(@__DIR__, "Results", "Planner_CM")
+)
+@show objective_value(cp_cm[:model])

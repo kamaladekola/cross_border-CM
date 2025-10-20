@@ -1,60 +1,67 @@
 function solve_interconnector_agent!(mod::Model)
-    # Extract sets
-    JH = mod.ext[:sets][:JH]
-    JZ = mod.ext[:sets][:JZ]
-    JL = mod.ext[:sets][:JL]
-    JN = mod.ext[:sets][:JN]
-    W = mod.ext[:parameters][:w]
 
-    G_nodal = mod.ext[:parameters][:G_nodal]         # |H|×|N|
-    D_nodal = mod.ext[:parameters][:D_nodal]         # |H|×|N|
-    Y_nodal = mod.ext[:parameters][:Y_nodal]         # |H|×|N|
-    nodal_PTDF = mod.ext[:parameters][:nodal_PTDF]      # |L|×|N| nodal PTDF
+    # Sets
+    JH = mod.ext[:sets][:JH]           # hours
+    JZ = mod.ext[:sets][:JZ]           # zones
+    JL = mod.ext[:sets][:JL]           # lines
+    JN = mod.ext[:sets][:JN]           # nodes
 
-    λ_all = mod.ext[:parameters][:λ_all]  # λ_EOM[t,z]
+    # Parameters
+    W = mod.ext[:parameters][:w]                            # hour weights
+    nodal_PTDF = mod.ext[:parameters][:nodal_PTDF]         # |L|×|N| nodal PTDF
+    λ_all = mod.ext[:parameters][:λ_all]                    # |H|×|Z| EOM prices per zone
 
-    # ADMM consensus variables and penalty
-    g_bar_all = mod.ext[:parameters][:g_bar_all]  # ḡ[t,z]
-    ρ_all = mod.ext[:parameters][:ρ_all]
-    # net position: positive => import
+    # retrieved from ADMM_subroutine
+    D_nodal = mod.ext[:parameters][:D_nodal]                # |H|×|N|
+    Y_nodal = mod.ext[:parameters][:Y_nodal]                # |H|×|N|
+    Y_zonal = mod.ext[:parameters][:Y_zonal]                # |Z| zonal capacity allocation
+    g_bar_all = mod.ext[:parameters][:g_bar_all]            # |H|×|Z|
+    ρ_all = mod.ext[:parameters][:ρ_all]                    # |Z|
+    BRANCHES = mod.ext[:parameters][:BRANCHES]              #lines [(from,to,Fmax)]
+    Fmax = [BRANCHES[jl][3] for jl in JL]
+    zone_of_idx = mod.ext[:parameters][:zone_of_idx]
+    rc = mod.ext[:parameters][:reserve_cost]
 
-    g = mod.ext[:variables][:g]
-    g_red = mod.ext[:variables][:redispatch]
-    flow = mod.ext[:variables][:flow]
-    # ens_IC = mod.ext[:variables][:ens_IC]
-    ens_pos = mod.ext[:variables][:ens_pos]
-    ens_neg = mod.ext[:variables][:ens_neg]
-    ens_IC = mod.ext[:expressions][:ens_IC]
-    # ens_IC = mod.ext[:variables][:ens_IC]
+    # Variables
+    g = mod.ext[:variables][:g]                    # net position: positive => import
+    r = mod.ext[:variables][:r]                    # nodal injections
+    flow  = mod.ext[:variables][:flow]             # line flows
 
-    ## Objective
+    g_bar = mod.ext[:variables][:g_bar]             # nodal generation
+    y_bar = mod.ext[:variables][:y_bar]             # nodal capacity allocation
+    s = mod.ext[:variables][:s]
+
+    # Objective
     mod.ext[:objective] = @objective(mod, Min, 
     - sum(W[jh] * λ_all[jh,jz] * g[jh,jz] for jh in JH, jz in JZ)
     + sum(W[jh] * (ρ_all[jz]/2) * (g[jh,jz] - g_bar_all[jh,jz])^2 for jh in JH, jz in JZ)
-    + sum(W[jh] * ((ens_pos[jh,jn] + ens_neg[jh,jn]) * 1e8) for jh in JH, jn in JN)
-    # + sum(W[jh] * ens_IC[jh,jn] * 1e7 for jh in JH, jn in JN)
+    + sum(rc * s[jn] for jn in JN)
     )
 
-    # mod.ext[:objective] = @objective(mod, Min, 0)
+    # -------------------------------------------------------------
+    # redefining constraints with updated parameters
+    # --------------------------------------------------------------
 
-
-    for jh in JH, jl in JL
-        delete(mod, mod.ext[:constraints][:nodal_balance][jh,jl])
-    end
-    mod.ext[:constraints][:nodal_balance] = @constraint(mod, [jh in JH, jl in JL],
-        flow[jh,jl] == sum(nodal_PTDF[jl, jn] * (G_nodal[jh,jn] + g_red[jh,jn] - (D_nodal[jh,jn] + ens_IC[jh,jn])) for jn in JN))
-
-
-        
+    # nodal balance constraint: flow = generation - demand
     for jh in JH, jn in JN
-        delete(mod, mod.ext[:constraints][:redispatch_limit][jh,jn])
+        delete(mod, mod.ext[:constraints][:nodal_balance][jh,jn])
     end
-    mod.ext[:constraints][:redispatch_limit] = @constraint(mod, [jh in JH, jn in JN], 
-    0 <= G_nodal[jh,jn] + g_red[jh,jn] + ens_IC[jh,jn] <= Y_nodal[jh,jn])
+    mod.ext[:constraints][:nodal_balance] = @constraint(mod, [jh in JH, jn in JN], 
+        r[jh, jn] == g_bar[jh, jn] - D_nodal[jh,jn])
+
+    # nodal capacity limit
+    for jh in JH, jn in JN
+        delete(mod, mod.ext[:constraints][:cap_limit][jh,jn])
+    end
+    mod.ext[:constraints][:cap_limit] = @constraint(mod, [jh in JH, jn in JN], (g_bar[jh, jn] - Y_nodal[jh, jn]) <= y_bar[jn] + s[jn]) # to be checked
+
+    # zonal capacity allocation to nodes
+    for jz in JZ
+        delete(mod, mod.ext[:constraints][:capacity_allocation][jz])
+    end
+    mod.ext[:constraints][:capacity_allocation] = @constraint(mod, [jz in JZ], Y_zonal[jz] == sum(y_bar[jn] for jn in JN if zone_of_idx[jn] == jz))
 
     optimize!(mod);
 
     return mod
 end
-
-

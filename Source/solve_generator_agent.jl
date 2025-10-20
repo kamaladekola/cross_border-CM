@@ -20,8 +20,6 @@ function solve_generator_agent!(mod::Model, m::String, zones::Vector{String})
     y_init   = mod.ext[:parameters][:C]         # existing capacity
     σ_CM = mod.ext[:parameters][:σ_CM]          # 1 if capacity markets are active, 0 otherwise
 
-    PM = mod.ext[:parameters][:participation_matrix]
-    DF = mod.ext[:parameters][:derating_factor]
 
     # Create variables
     g = mod.ext[:variables][:g]  
@@ -31,16 +29,13 @@ function solve_generator_agent!(mod::Model, m::String, zones::Vector{String})
 
     # Objective => minimize GenCo costs
     mod.ext[:objective] = @objective(mod, Min,
-        + sum(W[jh] * A/2*g[jh]^2 for jh in JH)                       # quadratic cost function
+        + sum(W[jh] * A/2*g[jh]^2 for jh in JH)                                             # cost function for generation
         + sum(W[jh] * B*g[jh] for jh in JH)
-        - sum(W[jh] * λ_EOM[jh]*g[jh] for jh in JH)                   # revenue from EOM with weights
-        + I * (y - y_init)                                            # investment cost (not time-dependent)
-        # - σ_CM * sum(λ_CM[jz] * cap_cm[jz] * PM[m][zones[jz]] * DF[m][zones[jz]] for jz in JZ)        
-        - σ_CM * sum(λ_CM[home_zone] * cap_cm[jz] * PM[m][zones[jz]] * DF[m][zones[jz]] for jz in JZ)
-        + sum(W[jh] * ρ_EOM/2*(g[jh] - g_bar[jh])^2 for jh in JH)     # ADMM penalty term for EOM clearing with weights
-        # + σ_CM * sum(ρ_CM[jz]/2 * PM[m][zones[jz]] * (cap_cm[jz] - cap_bar[jz])^2 for jz in JZ) # ADMM penalty term for capacity markets
-        + σ_CM * ρ_CM[home_zone]/2 * (sum(cap_cm[jz] for jz in JZ) - cap_bar[home_zone])^2 # ADMM penalty term for capacity markets
-
+        - sum(W[jh] * λ_EOM[jh]*g[jh] for jh in JH)                                         # weighted revenue from EOM
+        + I * y                                                                             # annualized investment cost
+        - σ_CM * sum(λ_CM[home_zone] * cap_cm[jz] for jz in JZ)                             # capacity market revenue - uniform price auction
+        + sum(W[jh] * ρ_EOM/2*(g[jh] - g_bar[jh])^2 for jh in JH)                           # ADMM penalty term for EOM clearing with weights
+        + σ_CM * ρ_CM[home_zone]/2 * (sum(cap_cm[jz] for jz in JZ) - cap_bar[home_zone])^2  # ADMM penalty term for CM
     )
 
 

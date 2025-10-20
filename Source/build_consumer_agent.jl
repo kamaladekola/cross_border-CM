@@ -1,22 +1,22 @@
 function build_consumer_agent!(mod::Model, m::String, zones::Vector{String})
     z, _ = parse_agent_name(m)
+
     # Extract sets
     JH = mod.ext[:sets][:JH]
     JZ = mod.ext[:sets][:JZ]
     JN = mod.ext[:sets][:JN]
 
-    # Extract time series data
+    # Extract time series & parameters
     D = mod.ext[:timeseries][:D] 
     W = mod.ext[:parameters][:w]
 
-    # Extract parameters
     WTP = mod.ext[:parameters][:WTP]                  # value of lost load
     ela = mod.ext[:parameters][:ela]                  # fraction of demand that is elastic
     CD = mod.ext[:parameters][:CD]                    # if we want to use predefined Capacity demand
     CD_margin = mod.ext[:parameters][:CD_margin]      # capacity demand margin
     σ_CM = mod.ext[:parameters][:σ_CM]                # 1 if capacity markets are active, 0 otherwise
     # D_max = mod.ext[:parameters][:D_max]            # maximum demand (can be used in place of CD)
-    WTP_CM = mod.ext[:parameters][:WTP_CM]          # Willingness to pay for capacity in the CM (price target)
+    WTP_CM = mod.ext[:parameters][:WTP_CM]            # Willingness to pay for capacity in the CM (price target)
 
     # ADMM parameters
     λ_EOM = mod.ext[:parameters][:λ_EOM]            # EOM prices
@@ -25,53 +25,41 @@ function build_consumer_agent!(mod::Model, m::String, zones::Vector{String})
     λ_CM = mod.ext[:parameters][:λ_CM]              # CM prices
     ρ_CM = mod.ext[:parameters][:ρ_CM]              # rho-value in ADMM related to capacity markets
     cap_bar = mod.ext[:parameters][:cap_bar]        # element in ADMM penalty term related to capacity markets
-    PM = mod.ext[:parameters][:participation_matrix]
 
-    node_share = mod.ext[:parameters][:node_share]   # Dict(:n1=>0.6, :n2=>0.4)
+    PM = mod.ext[:parameters][:participation_matrix]
+    node_share = mod.ext[:parameters][:node_share_vec]
     nodes  = mod.ext[:parameters][:nodes]
 
     # Create variables
-    d_nodal = mod.ext[:variables][:d_nodal] = @variable(mod, [jh in JH, jn in JN], lower_bound=0, base_name="d_nodal")
     g = mod.ext[:variables][:g] = @variable(mod, [jh=JH], base_name="generation")                                       # consumption as negative generation
     g_VOLL = mod.ext[:variables][:g_VOLL] = @variable(mod, [jh=JH], lower_bound = 0, base_name="inelastic demand")      # inelastic demand
     g_ela = mod.ext[:variables][:g_ela] = @variable(mod, [jh=JH], lower_bound = 0, base_name="elastic demand")          # elastic demand
     ens = mod.ext[:variables][:ens] = @variable(mod, [jh=JH], lower_bound = 0, base_name="unserved_energy")             # unserved energy
-    cap_cm = mod.ext[:variables][:cap_cm] = @variable(mod, [jz=JZ], lower_bound = 0, base_name = "capacity offered")                     # capacity offered in capacity markets
-    # peak = mod.ext[:variables][:peak] = @variable(mod, base_name="peak_demand", lower_bound = 0 )                       # peak demand
+    cap_cm = mod.ext[:variables][:cap_cm] = @variable(mod, [jz=JZ], lower_bound = 0, base_name = "capacity offered")    # capacity offered in capacity markets
 
-    # Create affine expressions
-    g_positive = mod.ext[:expressions][:g_positive] = @expression(mod, [jh=JH], g_VOLL[jh] + g_ela[jh])
-
-    neg_utility = mod.ext[:expressions][:utility] = @expression(mod,                                                                                           
-    sum(W[jh] * ((λ_EOM[jh] - WTP)*g_positive[jh] + (WTP/(2*ela*D[jh]))*(g_ela[jh])^2) for jh in JH)
-    + σ_CM * sum(λ_CM[jz] * cap_cm[jz] * PM[m][zones[jz]] for jz in JZ) # should I add a willigness to pay for capacity market?
-    # + σ_CM * sum((λ_CM[jz] - WTP_CM) * cap_cm[jz] * PM[m][zones[jz]] for jz in JZ)
-    # + sum(W[jh] * WTP * ens[jh] for jh in JH) # should I penalize unserved energy?
+    # Create expressions
+    g_positive = mod.ext[:expressions][:g_positive] = @expression(mod, [jh=JH], -g[jh])  # consumption as positive value
+    neg_utility = mod.ext[:expressions][:utility] = @expression(mod,
+    sum(W[jh] * ((λ_EOM[jh] - WTP) * g_positive[jh] + (WTP/(2 * ela * D[jh])) * (g_ela[jh])^2) for jh in JH)                    # Utility function for energy consumption
+    + σ_CM * sum(λ_CM[jz] * cap_cm[jz] for jz in JZ)                                                                                      # payment for reliability through capacity markets 
     )
 
     # Objective => minimize negative utility (maximize utility)
     mod.ext[:objective] = @objective(mod, Min,
     neg_utility 
     + sum(W[jh] * ρ_EOM/2 * (g[jh] - g_bar[jh])^2 for jh in JH)
-    + σ_CM * sum(ρ_CM[jz]/2 * PM[m][zones[jz]] * (cap_cm[jz] - cap_bar[jz])^2 for jz in JZ)
+    + σ_CM * sum(ρ_CM[jz]/2 * (cap_cm[jz] - cap_bar[jz])^2 for jz in JZ)
     )
 
     # Constraints
-    mod.ext[:constraints][:consumption] = @constraint(mod, [jh=JH], g[jh] == - g_positive[jh])                           # consumption as negative generation
-    mod.ext[:constraints][:elastic_demand] = @constraint(mod, [jh=JH], g_ela[jh] <= ela * D[jh])                         # Elastic demand limit
-    mod.ext[:constraints][:inelastic_demand] = @constraint(mod, [jh=JH], g_VOLL[jh] + ens[jh] == (1 - ela) * D[jh])      # Inelastic demand limit
+    mod.ext[:constraints][:consumption] = @constraint(mod, [jh=JH], g[jh] == -1 * (g_VOLL[jh] + g_ela[jh]))                             # consumption as negative generation
+    mod.ext[:constraints][:elastic_demand] = @constraint(mod, [jh=JH], g_ela[jh] <= ela * D[jh])                                        # Elastic demand limit
+    mod.ext[:constraints][:inelastic_demand] = @constraint(mod, [jh=JH], g_VOLL[jh] + ens[jh] == (1 - ela) * D[jh])                     # Inelastic demand limit
     
-    mod.ext[:constraints][:d_nodal] = @constraint(mod, [jh in JH, jn in JN],
-    d_nodal[jh,jn] == get(node_share, nodes[jn], 0.0) * g_positive[jh])
-
-    mod.ext[:constraints][:d_zonal_balance] = @constraint(mod, [jh in JH],
-    sum(d_nodal[jh, jn] for jn in JN) == g_positive[jh])
-
+    d_nodal = mod.ext[:expressions][:d_nodal] = @expression(mod, [jh in JH, jn in JN], node_share[jn] * g_positive[jh])
 
     for jz in JZ
         if zones[jz] == z
-            # for gh in timesteps
-                #  if lambda_eom > 300
             mod.ext[:constraints][Symbol("CD_$jz")] = @constraint(mod, cap_cm[jz] >= σ_CM * PM[m][zones[jz]] * (1 + CD_margin) * CD)
             mod.ext[:constraints][Symbol("CD_upper_$jz")] = @constraint(mod, cap_cm[jz] <= σ_CM * PM[m][zones[jz]] * (1 + CD_margin) * CD)
         else
@@ -79,15 +67,6 @@ function build_consumer_agent!(mod::Model, m::String, zones::Vector{String})
             mod.ext[:constraints][Symbol("CD_upper_$jz")] = @constraint(mod, cap_cm[jz] <= 0.0)
         end
     end
-    
-    # Battery / electrolyzer model 
-
-    # find peak 
-    # peak greater than g[jh]
-    # peak greater than 0
-    # multiple consumers and reliability options for future work.
-    # including multiple CM implementations.
-    # different capacity market zones from energy market zones
 
     return mod
 end

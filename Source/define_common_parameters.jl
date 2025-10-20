@@ -13,14 +13,15 @@ function define_common_parameters!(m::String,mod::Model, data::Dict, ts::DataFra
     # Sets
     mod.ext[:sets][:JH] = 1:data["General"]["nTimesteps"]
     mod.ext[:sets][:JZ] = 1:length(zones)
-  
+    mod.ext[:sets][:JL] = 1:nrow(lines)
+
     # Parameters related to the EOM
     mod.ext[:parameters][:λ_EOM] = zeros(data["General"]["nTimesteps"])     # Price structure
     mod.ext[:parameters][:g_bar] = zeros(data["General"]["nTimesteps"])     # ADMM penalty term
     mod.ext[:parameters][:ρ_EOM] = data["ADMM"]["rho_EOM"]                  # ADMM rho value
     mod.ext[:parameters][:ρ_all] = data["ADMM"]["rho_EOM"] * ones(length(zones))
 
-    # Parameters related to the crossborder electricity capacity markets
+    # Parameters related to capacity market
     mod.ext[:parameters][:λ_CM] = zeros(length(zones))
     mod.ext[:parameters][:cap_bar] = zeros(length(zones))
     mod.ext[:parameters][:ρ_CM] = data["ADMM"]["rho_CM"] * ones(length(zones))
@@ -35,23 +36,10 @@ function define_common_parameters!(m::String,mod::Model, data::Dict, ts::DataFra
         agent_name = row[:agent]
         participation_switch[agent_name] = Dict(z => row[Symbol(z)] for z in zones)
     end
-    # data["General"]["participation_matrix"] = participation_switch
     mod.ext[:parameters][:participation_matrix] = participation_switch
-
-    # Derating factors
-    derating_switch = Dict{String, Dict{String, Float64}}()
-
-    for row in eachrow(derating_factor)
-        agent_name = row[:agent]
-        derating_switch[agent_name] = Dict(z => row[Symbol(z)] for z in zones)
-    end
-    # data["General"]["derating_factor"] = derating_switch
-    mod.ext[:parameters][:derating_factor] = derating_switch
 
     mod.ext[:parameters][:w] = ts[!, :weights][1:data["General"]["nTimesteps"]]
     
-    # interconnectors
-    mod.ext[:parameters][:TCONNECT] = [(Symbol(a),Symbol(b)) for (a,b) in data["Network"]["TCONNECT"]]
     # Node -> zone mapping
     zone_map = Dict{Symbol,Vector{Symbol}}()
 
@@ -61,31 +49,30 @@ function define_common_parameters!(m::String,mod::Model, data::Dict, ts::DataFra
     mod.ext[:parameters][:zone_map] = zone_map
 
     # list of nodes
-    node_syms = reduce(vcat, values(zone_map))
+    node_syms = collect(Iterators.flatten(values(zone_map)))
     mod.ext[:parameters][:nodes] = node_syms
 
     # set of nodes
     mod.ext[:sets][:JN] = 1:length(node_syms)
-    data["General"]["nNodes"] = length(node_syms)
+    data["General"]["nNodes"] = length(node_syms) # (non) issue: modifying data inside agent specific function. 
     # node → zone lookup
-    zone_of = Dict{Symbol,Symbol}()
+    zone_of_node = Dict{Symbol,Symbol}()
     for (Z,N) in zone_map
         for n in N
-            zone_of[n] = Z
+            zone_of_node[n] = Z
         end
     end
 
-    mod.ext[:parameters][:zone_of] = zone_of
+    mod.ext[:parameters][:zone_of_node] = zone_of_node
 
     zone_syms = Symbol.(sort(zones))
     
     mod.ext[:parameters][:zone_syms] = zone_syms
 
     zone_idx = Dict(z=>i for (i,z) in enumerate(zone_syms))
-    mod.ext[:parameters][:zone_of_idx] = [zone_idx[zone_of[n]] for n in node_syms]
+    mod.ext[:parameters][:zone_of_idx] = [zone_idx[zone_of_node[n]] for n in node_syms]
 
     # Network topology
-    mod.ext[:sets][:JL] = 1:nrow(lines)
     # Line IDs
     mod.ext[:parameters][:lines] = lines[!, :line_id]
 
@@ -96,14 +83,14 @@ function define_common_parameters!(m::String,mod::Model, data::Dict, ts::DataFra
     node_names = String.(mod.ext[:parameters][:nodes])
     mod.ext[:parameters][:nodal_PTDF] = Matrix(nodal_ptdf[:, node_names])
 
-    mod.ext[:parameters][:G_nodal] =  zeros(data["General"]["nTimesteps"], length(node_syms))
     mod.ext[:parameters][:D_nodal] =  zeros(data["General"]["nTimesteps"], length(node_syms))
     mod.ext[:parameters][:Y_nodal] =  zeros(data["General"]["nTimesteps"], length(node_syms))
+    mod.ext[:parameters][:Y_zonal] =  zeros(length(zones))
 
 
     # capacity market parameters
     mod.ext[:parameters][:coupling] = data["Network"]["coupling"]
-    
+    mod.ext[:parameters][:reserve_cost] = data["Network"]["reserve_cost"] # cost of procuring reserve to ensure feasibility
 
     return mod, agents
 end

@@ -5,29 +5,23 @@ function build_getATC!(mod::Model)
     JL = mod.ext[:sets][:JL]
     JN = mod.ext[:sets][:JN]
     JS = mod.ext[:sets][:JS]
+    JZ = mod.ext[:sets][:JZ]
 
     TCONNECT    = mod.ext[:parameters][:TCONNECT]
     signs       = mod.ext[:parameters][:signs]
     nodes       = mod.ext[:parameters][:nodes]
     BRANCHES    = mod.ext[:parameters][:BRANCHES]
     zone_syms   = mod.ext[:parameters][:zone_syms]
-    zone_of     = mod.ext[:parameters][:zone_of]
+    zone_of_node     = mod.ext[:parameters][:zone_of_node]
     zone_of_idx = mod.ext[:parameters][:zone_of_idx]
 
     CapCM_nodal = mod.ext[:parameters][:CapCM_nodal]
     nodal_PTDF  = mod.ext[:parameters][:nodal_PTDF]
-    d_scarcity  = mod.ext[:parameters][:d_scarcity] 
+    d_scarcity  = mod.ext[:parameters][:d_scarcity]
+    reserve_cost = mod.ext[:parameters][:reserve_cost]
 
     demand = mod.ext[:parameters][:Cap_Demand_nodal]
-
     epsilon = 1e-8
-    M = 1e10
-
-    
-    s_pos = mod.ext[:variables][:s_pos] = @variable(mod, [jn in JN], lower_bound = 0)          # extra gen   (MW)
-    s_neg = mod.ext[:variables][:s_neg] = @variable(mod, [jn in JN], lower_bound = 0)           # shed load   (MW)
-
-    ens = mod.ext[:expressions][:ens_atc] = @expression(mod, [jn=JN], s_pos[jn] - s_neg[jn])
 
 
     atc_plus  = mod.ext[:variables][:atc_plus]  =
@@ -44,19 +38,19 @@ function build_getATC!(mod::Model)
 
     f = mod.ext[:variables][:f] = @variable(mod, [jv in JV, jl in JL], base_name = "f")
 
-    net_pos = mod.ext[:variables][:net_pos] = @variable(mod, [jv in JV, jz in 1:length(zone_syms)], base_name = "net_pos")
+    net_pos = mod.ext[:variables][:net_pos] = @variable(mod, [jv in JV, jz in JZ], base_name = "net_pos")
 
     e = mod.ext[:variables][:e] = @variable(mod, [jv in JV, t in TCONNECT], base_name = "e")
 
+    reserve = mod.ext[:variables][:network_reserve] = @variable(mod, [jn in JN], lower_bound = 0, base_name = "network_reserve")
 
 
-    # mod.ext[:objective] = @objective(mod, Max, sum(atc_plus[t] + atc_minus[t] for t in TCONNECT) - sum(ens[jn] for jn in JN)^2 * 1e10)
     mod.ext[:objective] = @objective(mod, Max, sum(atc_plus[t] + atc_minus[t] for t in TCONNECT)
         - epsilon * sum(atc_plus[t]^2 + atc_minus[t]^2 for t in TCONNECT)
-        - M * sum((s_pos[jn] + s_neg[jn]) for jn in JN)
+        - reserve_cost * sum(reserve[jn] for jn in JN)
         )
 
-    # @constraint(mod, [t in TCONNECT], -atc_minus[t] <= atc_plus[t])
+    @constraint(mod, [t in TCONNECT], -atc_minus[t] <= atc_plus[t])
 
     # CONSTRAINTS
     @constraint(mod, [jv in JV, jn in JN], v_dayahead[jv, jn] + v_redispatch[jv, jn] >= 0)
@@ -66,17 +60,20 @@ function build_getATC!(mod::Model)
     @constraint(mod, [jv in JV, (k, t) in enumerate(TCONNECT)],
         e[jv, t] == (signs[jv][k] == 1 ?  atc_plus[t] : -atc_minus[t]))
 
+    # # allocation of zonal capacity to nodes
+    # mod.ext[:constraints][:nodal_allocation] = @constraint(mod, [jz in JZ],
+    #     sum(CapCM_nodal[jn] for jn in JN if zone_of_idx[jn] == jz) == CapCM_zonal[jz])
+
     # thermal limits
     @constraint(mod, [jv in JV, jl in JL],
         -BRANCHES[jl][3] <= f[jv,jl] <= BRANCHES[jl][3])
 
     mod.ext[:constraints][:getATC_nodal_balance] = @constraint(mod, [jv in JV, jl in JL],
-        # f[jv,jl] == sum(nodal_PTDF[jl, jn] * ((CapCM_nodal[jn]) * (v_dayahead[jv,jn] + v_redispatch[jv,jn]) - demand[jn]) for jn in JN))
-        f[jv,jl] == sum(nodal_PTDF[jl, jn] * (CapCM_nodal[jn] * (v_dayahead[jv,jn] + v_redispatch[jv,jn]) - demand[jn]  + ens[jn]) for jn in JN))
+        f[jv,jl] == sum(nodal_PTDF[jl, jn] * (CapCM_nodal[jn] * (v_dayahead[jv,jn] + v_redispatch[jv,jn]) + reserve[jn] - demand[jn]) for jn in JN))
 
     @constraint(mod, [jv in JV, t in TCONNECT],
-        e[jv,t] == sum(f[jv,jl] * ((zone_of[BRANCHES[jl][1]], zone_of[BRANCHES[jl][2]]) == t  ?  1 :
-                 (zone_of[BRANCHES[jl][2]], zone_of[BRANCHES[jl][1]]) == t  ? -1 : 0) for jl in JL))
+        e[jv,t] == sum(f[jv,jl] * ((zone_of_node[BRANCHES[jl][1]], zone_of_node[BRANCHES[jl][2]]) == t  ?  1 :
+                 (zone_of_node[BRANCHES[jl][2]], zone_of_node[BRANCHES[jl][1]]) == t  ? -1 : 0) for jl in JL))
 
     # zone net positions
     @constraint(mod, [jv in JV, (jz, zsym) in enumerate(zone_syms)],
@@ -85,14 +82,13 @@ function build_getATC!(mod::Model)
             sum(e[jv,t] for t in TCONNECT if t[2] == zsym))
 
     mod.ext[:constraints][:getATC_zonal_balance] = @constraint(mod, [jv in JV, (jz, zsym) in enumerate(zone_syms)],
-        sum(CapCM_nodal[jn] * v_dayahead[jv,jn] for jn in JN if zone_of[nodes[jn]] == zsym)
-        # - net_pos[jv,jz] == sum(demand[jn] for jn in JN if zone_of[nodes[jn]] == zsym)
-        - net_pos[jv,jz] == sum(demand[jn] - ens[jn] for jn in JN if zone_of[nodes[jn]] == zsym))
+        sum(CapCM_nodal[jn] * v_dayahead[jv,jn] for jn in JN if zone_of_node[nodes[jn]] == zsym)
+        - net_pos[jv,jz] == sum(demand[jn] - reserve[jn]  for jn in JN if zone_of_node[nodes[jn]] == zsym)
+        )
 
     mod.ext[:constraints][:getATC_redispatch_limit] =
         @constraint(mod, [jv in JV, (jz, zsym) in enumerate(zone_syms)],
-        # sum((CapCM_nodal[jn] + ens[jn]) * v_redispatch[jv,jn] for jn in JN if zone_of[nodes[jn]] == zsym) == 0)
-        sum((CapCM_nodal[jn]) * v_redispatch[jv,jn] for jn in JN if zone_of[nodes[jn]] == zsym) == 0)
+        sum((CapCM_nodal[jn]) * v_redispatch[jv,jn] for jn in JN if zone_of_node[nodes[jn]] == zsym) == 0)
 
 
     return mod

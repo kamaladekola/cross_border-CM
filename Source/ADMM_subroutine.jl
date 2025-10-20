@@ -4,23 +4,22 @@ function ADMM_subroutine!(m::String, results::Dict, ADMM::Dict, EOM::Dict, CM::D
     if m == "NetworkManager"
         # Update network manager-specific parameters
         @timeit TO_local "Compute NetworkManager penalty terms" begin
-
-            G_nodal = zeros(data["General"]["nTimesteps"], data["General"]["nNodes"])
-            D_nodal = zeros(data["General"]["nTimesteps"], data["General"]["nNodes"])
-            Y_nodal = zeros(data["General"]["nTimesteps"], data["General"]["nNodes"])
+            Y_nodal =  zeros(data["General"]["nTimesteps"], data["General"]["nNodes"])
+            D_nodal =  zeros(data["General"]["nTimesteps"], data["General"]["nNodes"])
+            Y_zonal =  zeros(length(zones))
 
             for gen in agents[:Gen]
-                G_nodal .+= results["g_nodal"][gen][end]
                 Y_nodal .+= results["y_nodal"][gen][end]
+                Y_zonal .+= results["y"][gen][end]
             end
 
             for cons in agents[:Cons]
                 D_nodal .+= results["Cons"]["d_nodal"][cons][end]
             end
 
-            mod.ext[:parameters][:G_nodal] = G_nodal
             mod.ext[:parameters][:D_nodal] = D_nodal
             mod.ext[:parameters][:Y_nodal] = Y_nodal
+            mod.ext[:parameters][:Y_zonal] = Y_zonal
 
             mod.ext[:parameters][:g_bar_all] = Matrix{Float64}(undef, size(results["g"][m][end], 1), length(zones))
             for (zone_idx, z) in enumerate(zones)
@@ -43,18 +42,19 @@ function ADMM_subroutine!(m::String, results::Dict, ADMM::Dict, EOM::Dict, CM::D
     elseif m == "CapacityManager"
 
 
-        CapCM_nodal = zeros(data["General"]["nNodes"])
+        CapCM_zonal = zeros(length(zones))  # total capacity procured in each zone
 
         for gen in intersect(agents[:Gen], agents[:cm])
-            CapCM_nodal .+= results["CapCM_nodal"][gen][end]
+            CapCM_zonal .+= results["cap_cm"][gen][end]
         end
 
-        mod.ext[:parameters][:CapCM_nodal] = CapCM_nodal
-        if data["Network"]["coupling"] == "ATC"
-            @timeit TO_local "Get ATC" begin
-                mod.ext[:parameters][:ATC] = solve_getATC!(mod)
-            end
-        end
+        mod.ext[:parameters][:CapCM_zonal] = CapCM_zonal
+        
+        # if data["Network"]["coupling"] == "ATC"
+        #     @timeit TO_local "Get ATC" begin
+        #         mod.ext[:parameters][:ATC] = solve_getATC!(mod)
+        #     end
+        # end
         
         @timeit TO_local "Compute CapacityManager penalty terms" begin
             for (zone_idx, z) in enumerate(zones)
@@ -111,11 +111,11 @@ function ADMM_subroutine!(m::String, results::Dict, ADMM::Dict, EOM::Dict, CM::D
             end
         elseif m == "CapacityManager"
             # @timeit TO_local "Solve capacity manager problem" begin
-                # solve_capacityIC_agent!(mod, data, zones)
-                # status = JuMP.termination_status(mod)
-                # if status != MOI.OPTIMAL
-                #     error("ADMM_subroutine!($m) did not solve to optimality.  status = $status")
-                # end
+            #     solve_capacityIC_agent!(mod, data, zones)
+            #     status = JuMP.termination_status(mod)
+            #     if status != MOI.OPTIMAL
+            #         error("ADMM_subroutine!($m) did not solve to optimality.  status = $status")
+            #     end
             # end
         end
     end
@@ -124,10 +124,9 @@ function ADMM_subroutine!(m::String, results::Dict, ADMM::Dict, EOM::Dict, CM::D
     @timeit TO_local "Query results" begin
         if m in agents[:Gen]
             push!(results["g"][m], collect(value.(mod.ext[:variables][:g])))
-            push!(results["g_nodal"][m], collect(value.(mod.ext[:variables][:g_nodal])))
             push!(results["y"][m], value(mod.ext[:variables][:y]))
             push!(results["y_nodal"][m], collect(value.(mod.ext[:expressions][:y_nodal])))
-            push!(results["CapCM_nodal"][m], collect(value.(mod.ext[:variables][:cap_cm_nodal])))
+            # push!(results["CapCM_nodal"][m], collect(value.(mod.ext[:variables][:cap_cm_nodal])))
             # if agent participates in CM
             if m in agents[:cm]
                 push!(results["cap_cm"][m], collect(value.(mod.ext[:variables][:cap_cm])))
@@ -137,7 +136,7 @@ function ADMM_subroutine!(m::String, results::Dict, ADMM::Dict, EOM::Dict, CM::D
             push!(results["Cons"]["inelastic_demand"][m], collect(value.(mod.ext[:variables][:g_VOLL])))
             push!(results["Cons"]["elastic_demand"][m], collect(value.(mod.ext[:variables][:g_ela])))
             push!(results["Cons"]["ENS"][m], collect(value.(mod.ext[:variables][:ens])))
-            push!(results["Cons"]["d_nodal"][m], collect(value.(mod.ext[:variables][:d_nodal])))
+            push!(results["Cons"]["d_nodal"][m], collect(value.(mod.ext[:expressions][:d_nodal])))
         
             if m in agents[:cm]
                 push!(results["cap_cm"][m], collect(value.(mod.ext[:variables][:cap_cm])))

@@ -27,25 +27,22 @@ function solve_consumer_agent!(mod::Model, m::String, zones::Vector{String})
 
     # Create variables
     g = mod.ext[:variables][:g]
-    g_VOLL = mod.ext[:variables][:g_VOLL]
     g_ela = mod.ext[:variables][:g_ela]
-    ens = mod.ext[:variables][:ens]
     cap_cm = mod.ext[:variables][:cap_cm]                                                                              # negative capacity offered in capacity markets
 
     # Create affine expressions
-    g_positive = mod.ext[:expressions][:g_positive] = @expression(mod, [jh=JH], g_VOLL[jh] + g_ela[jh])
+    g_positive = mod.ext[:expressions][:g_positive] = @expression(mod, [jh=JH], -g[jh])  # consumption as positive value
 
     neg_utility = mod.ext[:expressions][:utility] = @expression(mod,                                                                                           
     sum(W[jh] * ((λ_EOM[jh] - WTP)*g_positive[jh] + (WTP/(2*ela*D[jh]))*(g_ela[jh])^2) for jh in JH)
     + σ_CM * sum(λ_CM[jz] * cap_cm[jz] * PM[m][zones[jz]] for jz in JZ)
-    # + sum(W[jh] * WTP * ens[jh] for jh in JH) # implementation in kaminski thesis includes penalty for unserved energy
     )
 
     # Objective => minimize negative utility (maximize utility)
     mod.ext[:objective] = @objective(mod, Min,
     neg_utility 
     + sum(W[jh] * ρ_EOM/2 * (g[jh] - g_bar[jh])^2 for jh in JH)
-    + σ_CM * sum(ρ_CM[jz]/2 * PM[m][zones[jz]] * (cap_cm[jz] - cap_bar[jz])^2 for jz in JZ)
+    + σ_CM * sum(ρ_CM[jz]/2 * (cap_cm[jz] - cap_bar[jz])^2 for jz in JZ)
     )
     optimize!(mod);
 

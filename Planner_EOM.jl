@@ -5,6 +5,7 @@ using JuMP
 using Gurobi
 using DataFrames, CSV, YAML
 import MathOptInterface as MOI
+using Printf
 
 # Helper functions
 function get_any(d::Dict, keys::AbstractVector{<:AbstractString})
@@ -275,6 +276,7 @@ function build_planner_eom(; data, load, pv, wind_on, nodal_ptdf_df, lines, weig
     @variable(model, p[JH, JZ])
     @variable(model, d_inel[JH, JZ] >= 0)
     @variable(model, d_ela[JH, JZ]  >= 0)
+    @variable(model, ens[JH, JZ] >= 0)
 
     # negative utility function per zone
     function consumer_utility(t, z)
@@ -287,13 +289,11 @@ function build_planner_eom(; data, load, pv, wind_on, nodal_ptdf_df, lines, weig
         end
     end
 
-    # ENS
-    @expression(model, ens[t in JH, z in JZ], (1-ela[z]) * D_zonal[t, z] - d_inel[t, z])
 
     # marginal cost + quadratic cost
     @expression(model, gen_cost,
-        sum(W[t] * MC[i, z] * g[t, i, z] for t in JH, i in JI, z in JZ) +
-        sum(W[t] * A[i, z] / 2 * g[t, i, z]^2 for t in JH, i in JI, z in JZ)
+        sum(W[t] * MC[i, z] * g[t, i, z] for t in JH, i in JI, z in JZ)
+        + sum(W[t] * A[i, z] / 2 * g[t, i, z]^2 for t in JH, i in JI, z in JZ)
     )
     # investment cost
     @expression(model, inv_cost, sum(IC[i, z] * y[i, z] for i in JI, z in JZ))
@@ -306,12 +306,13 @@ function build_planner_eom(; data, load, pv, wind_on, nodal_ptdf_df, lines, weig
 
     # Constraints
 
-    # demand elasticity
-    @constraint(model, [t in JH, z in JZ], d_inel[t, z] <= (1 - ela[z]) * D_zonal[t, z])
+    # demand
+    @constraint(model, [t in JH, z in JZ], d_inel[t, z] == (1 - ela[z]) * D_zonal[t, z] - ens[t, z])
     @constraint(model, [t in JH, z in JZ], d_ela[t, z]  <=  ela[z] * D_zonal[t, z])
 
+
     # zonal balance constraints
-    bal = @constraint(model, bal[t in JH, z in JZ], -p[t, z] + sum(g[t, i, z] for i in JI) - (d_inel[t, z] + d_ela[t, z]) == 0)
+    bal = @constraint(model, bal[t in JH, z in JZ],  sum(g[t, i, z] for i in JI) - p[t, z] - (d_inel[t, z] + d_ela[t, z]) == 0)
 
     # Aggregate nodal net positions to zonal net positions
     agg = @constraint(model, [t in JH, z in JZ], 
@@ -328,8 +329,8 @@ function build_planner_eom(; data, load, pv, wind_on, nodal_ptdf_df, lines, weig
     # Mainly constrains renewables investment
     Ren_cap = @constraint(model, [i in JI, z in JZ], sum(y_node[i, n] for n in JN if zone_of_node[n] == z) + y[i, z] <= max_cap[i, z])
 
-    # link between zonal and nodal capacity
-    alloc = @constraint(model, [i in JI, z in JZ], y[i, z] == sum(y_bar[i, n] for n in JN if zone_of_node[n] == z))
+    # link between zonal and nodal capacity (distorts zonal prices)
+    # alloc = @constraint(model, [i in JI, z in JZ], y[i, z] == sum(y_bar[i, n] for n in JN if zone_of_node[n] == z))
 
     # DC power flow constraints
     fmap  = @constraint(model, [t in JH, l in JL], f[t, l] == sum(PTDF[l, n] * r[t, n] for n in JN))
@@ -350,15 +351,16 @@ function build_planner_eom(; data, load, pv, wind_on, nodal_ptdf_df, lines, weig
         :params => params,
         :vars => Dict(
             :y => y, :y_bar => y_bar, :g => g, :g_bar => g_bar,
-            :r => r, :f => f, :p => p, :d_inel => d_inel, :d_ela => d_ela
+            :r => r, :f => f, :p => p, :d_inel => d_inel, :d_ela => d_ela, :ens => ens
         ),
         :constraint => Dict(
             :bal => bal, :agg => agg, :nbal => nbal, :cap => cap,
-            :alloc => alloc, :fmap => fmap, :therm => therm, :sbal => sbal,
-            :zonal_cap => zonal_cap, :Ren_cap => Ren_cap
+            :fmap => fmap, :therm => therm, :sbal => sbal,
+            :zonal_cap => zonal_cap, :Ren_cap => Ren_cap,
+            # :alloc => alloc,
         ),
         :scalars => Dict(:ela => ela, :WTP => WTP),
-        :expressions => Dict(:ens => ens, :gen_cost => gen_cost, 
+        :expressions => Dict(:gen_cost => gen_cost, 
             :inv_cost => inv_cost, :neg_utility => neg_utility)
     )
     return model
@@ -414,6 +416,7 @@ function solve_and_save(
     f_var     = vars[:f]        # (H,L)   line flows
     dinel_var = vars[:d_inel]   # (H,Z)   inelastic demand served
     dela_var  = vars[:d_ela]    # (H,Z)   elastic demand served
+    ens_var   = vars[:ens]      # (H,Z)   energy not served
 
 
     capacity     = value.(y_var)
@@ -424,13 +427,17 @@ function solve_and_save(
     flow     = value.(f_var)
     inel   = value.(dinel_var)
     elastic  = value.(dela_var)
+    ens_var   = value.(ens_var)
 
     # Zonal prices (€/MWh) from balance duals, unweighted
     W = params.W
     rho = [dual(ext[:constraint][:bal][t, z]) / W[t] for t in JH, z in JZ]
+    nbal_dual = [-dual(ext[:constraint][:nbal][t, n]) for t in JH, n in JN]
+
+
     # extract dual of alloc
-    dual_alloc = [dual(ext[:constraint][:alloc][i, z]) for i in JI, z in JZ] # show the dataframe in the terminal
-    println(DataFrame(dual_alloc, :auto))
+    # dual_alloc = [dual(ext[:constraint][:alloc][i, z]) for i in JI, z in JZ] # show the dataframe in the terminal
+    # println(DataFrame(dual_alloc, :auto))
 
     # Existing capacity C[i,z] from input data (for totals)
     Cz = zeros(length(JI), length(JZ))
@@ -455,17 +462,17 @@ function solve_and_save(
                 tstr = String(tech)
                 df[!, Symbol("Gen_$(z)_$(tstr)")]                = gen_t
                 df[!, Symbol("new_Capacity_Gen_$(z)_$(tstr)")]   = fill(capacity[i, zidx], length(JH))
-                df[!, Symbol("total_capacity_Gen_$(z)_$(tstr)")] = fill(Cz[i, zidx] + capacity[i, zidx], length(JH))
+                df[!, Symbol("Capacity_Gen_$(z)_$(tstr)")] = fill(Cz[i, zidx] + capacity[i, zidx], length(JH))
             end
 
         cons_total = inel[:, zidx] .+ elastic[:, zidx]
-        ens = value.(expressions[:ens])[:, zidx]
+        # ens = value.(expressions[:ens])[:, zidx]
 
         df[!, Symbol("Cons_$(z)")]           = cons_total
         df[!, Symbol("Inelastic_Cons_$(z)")] = inel[:, zidx]
         df[!, Symbol("Elastic_Cons_$(z)")]   = elastic[:, zidx]
-        df[!, :NetworkManager]               = net_pos[:, zidx]
-        df[!, Symbol("ENS_Cons_$(z)")]       = ens
+        df[!, :NetworkManager]               = -1 * net_pos[:, zidx]  # (imports positive)
+        df[!, Symbol("ENS_Cons_$(z)")]       = ens_var[:, zidx]
 
 
         for col in names(df)
@@ -474,7 +481,7 @@ function solve_and_save(
             end
         end
 
-        CSV.write(joinpath(output_dir, "zone_$(z).csv"), df)
+        CSV.write(joinpath(output_dir, "planner_zone_$(z).csv"), df; delim=";")
     end
 
     price_df = DataFrame(Timestep = collect(JH))
@@ -516,9 +523,36 @@ function solve_and_save(
         :flows_df             => flow_df,
         :out_dir              => output_dir,
         :model                => model,
+        :nbal_dual            => nbal_dual,  # Add these to the returned dictionary
+        :rho                  => rho
     )
 end
 
 inputs = read_inputs(@__DIR__)
 cp_eom = solve_and_save(inputs.data, inputs.load, inputs.pv, inputs.wind_on, inputs.nptdf, inputs.lines, inputs.weights; output_dir=joinpath(@__DIR__, "Results", "Planner"))
 @show objective_value(cp_eom[:model])
+# print(cp_eom)
+
+
+# JH = cp_eom[:model].ext[:sets].JH
+# JZ = cp_eom[:model].ext[:sets].JZ
+# JN = cp_eom[:model].ext[:sets].JN
+# zone_of_node = cp_eom[:model].ext[:maps].zone_of_node
+# nbal_dual = cp_eom[:nbal_dual]  
+# rho = cp_eom[:rho]          
+# y_nodal = cp_eom[:model].ext[:vars][:y_bar]
+# y_zonal = cp_eom[:model].ext[:vars][:y]
+
+# println(value.(y_nodal))
+# println(value.(y_zonal))
+
+
+# for t in JH
+#     for n in JN
+#         z = zone_of_node[n]
+#         nodal_price = nbal_dual[t, n]
+#         zonal_price = rho[t, z]
+#         # Print all nodal and zonal prices without condition
+#         println("Time $t, Node $n (Zone $z): $(round(nodal_price, digits=2)), Zonal price = $(round(zonal_price, digits=2))")
+#     end
+# end

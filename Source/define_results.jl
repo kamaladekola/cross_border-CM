@@ -14,17 +14,14 @@ function define_results!(data::Dict, results::Dict, ADMM::Dict, agents::Dict, zo
     # Store installed capacity results for generators
     results["y"] = Dict()
     results["y_nodal"] = Dict()
-    results["g_nodal"] = Dict()
     results["CapCM_nodal"] = Dict()
 
     for m in agents[:Gen]
         results["y"][m] = CircularBuffer{Float64}(data["CircularBufferSize"])
         results["y_nodal"][m] = CircularBuffer{Matrix{Float64}}(data["CircularBufferSize"])
-        results["g_nodal"][m] = CircularBuffer{Matrix{Float64}}(data["CircularBufferSize"])
         results["CapCM_nodal"][m] = CircularBuffer{Vector{Float64}}(data["CircularBufferSize"])
         push!(results["y"][m], 0.0)
         push!(results["y_nodal"][m], zeros(data["nTimesteps"], data["nNodes"]))
-        push!(results["g_nodal"][m], zeros(data["nTimesteps"], data["nNodes"]))
         push!(results["CapCM_nodal"][m], zeros(data["nNodes"]))
     end
 

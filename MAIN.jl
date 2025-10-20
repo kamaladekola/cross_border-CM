@@ -1,45 +1,20 @@
-
-
 ## 0. Set-up code
-# HPC or not?
-HPC = "NA" # NA (not applicable) or DelftBlue  
-
 # Home directory
 const home_dir = @__DIR__
 
-if HPC == "DelftBlue"  # only for running this on DelftBlue
-    ENV["GRB_LICENSE_FILE"] = "./Hpc/gurobi.lic"
-    ENV["GUROBI_HOME"] = "./scratch/kbruninx/gurobi950/linux64"
-    println(string("Number of threads: ", Threads.nthreads()))
-end
-
-if HPC == "ThinKing"  # only for running this on VSC
-    # ENV["GRB_LICENSE_FILE"] = " "
-    # ENV["GUROBI_HOME"] = " "
-end
-
 ######### Add packages #########
 # import Pkg
-# Pkg.add("DataStructures")
-# Pkg.add("ProgressBars")
-# Pkg.add("TimerOutputs")
-# Pkg.add("ArgParse")
-# Pkg.add("JuMP")
-# Pkg.add("Gurobi")
-# Pkg.add("CSV")
-# Pkg.add("YAML")
-# Pkg.add("DataFrames")
-# Pkg.add("JLD2") # for saving workspace
+# Pkg.add.(["DataStructures","ProgressBars","TimerOutputs","ArgParse","JuMP","Gurobi","CSV","YAML","DataFrames","JLD2"])
+
 
 # Include packages 
-using JuMP, Gurobi # Optimization packages
-using DataFrames, CSV, YAML, DataStructures # dataprocessing
-using ProgressBars, Printf # progress bar
+using JuMP, Gurobi
+using DataFrames, CSV, YAML, DataStructures
+using ProgressBars, Printf
 using TimerOutputs # profiling 
 using Base.Threads: @spawn 
 using Base: split
 using ArgParse # Parsing arguments from the command line
-# using JLD2 # save workspace
 
 # Gurobi environment to suppress output
 println("Define Gurobi environment...")
@@ -47,7 +22,7 @@ println("        ")
 const GUROBI_ENV = Gurobi.Env()
 # set parameters:
 GRBsetparam(GUROBI_ENV, "OutputFlag", "0")   
-GRBsetparam(GUROBI_ENV, "Threads", "4")   
+GRBsetparam(GUROBI_ENV, "Threads", "4")
 println("        ")
 
 # Include functions
@@ -88,7 +63,6 @@ lines = CSV.read(joinpath(home_dir,"Input","lines.csv"),delim=";",DataFrame)
 participation_matrix = CSV.read(joinpath(home_dir,"Input","participation_matrix.csv"),delim=";",DataFrame)
 derating_factor = CSV.read(joinpath(home_dir,"Input","derating_factor.csv"),delim=";",DataFrame)
 scarcity = CSV.read(joinpath(home_dir,"Input","scarcity.csv"),delim=";",DataFrame)
-# const TCONNECT = [(:A,:C), (:C,:B), (:B,:A)]
 
 # Overview scenarios
 scenario_overview = CSV.read(joinpath(home_dir,"overview_scenarios.csv"),DataFrame,delim=";")
@@ -103,32 +77,6 @@ end
 # Create folder for results
 if isdir(joinpath(home_dir,string("Results"))) != 1
     mkdir(joinpath(home_dir,string("Results")))
-end
-
-# Scenario number 
-if HPC == "DelftBlue"  
-   function parse_commandline()
-       s = ArgParseSettings()
-       @add_arg_table! s begin
-           "--start_scen"
-               help = "Enter the number of the first scenario here"
-               arg_type = Int
-               default = 1
-            "--stop_scen"
-               help = "Enter the number of the last scenario here"
-               arg_type = Int
-               default = 1
-       end
-       return parse_args(s)
-   end
-   # Simulation number as argument:
-   dict_sim_number =  parse_commandline()
-   start_scen = dict_sim_number["start_scen"]
-   stop_scen = dict_sim_number["stop_scen"]
-else
-    # Range of scenarios to be simulated
-    start_scen = 1
-    stop_scen = 2
 end
 
 scen_number = 1 # for debugging purposes, comment the for-loop and replace it by a explicit definition of the scenario you'd like to study
@@ -277,9 +225,9 @@ for m in agents[:IC]
 end
 for m in agents[:CIC]
     build_capacityIC_agent!(mdict[m])
-    if data["Network"]["coupling"] == "ATC"
-        build_getATC!(mdict[m])
-    end   
+    # if data["Network"]["coupling"] == "ATC"
+    #     build_getATC!(mdict[m])
+    # end   
 end
 
 println("Build model: done")

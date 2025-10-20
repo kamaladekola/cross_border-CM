@@ -3,12 +3,12 @@ General:
   nReprDays: 1 # days
   nDays: 365 # days
   nYears: 1 # years
-  sigmaCM: 0 # CM switch
+  sigmaCM: 1 # CM switch
 
 ADMM:
   rho_EOM: 1 # rho ADMM penalty term, EOM
   rho_CM: 1 # rho ADMM penalty term, CM
-  max_iter: 10000
+  max_iter: 5000
   epsilon: 0.1 # 0.1 # stopping criterion - tolerance on "accuracy" with which the coupling constraints are satisfied. Applied to dual and primal residuals.
   CircularBufferSize: 5 # number of iterations for which data will be retained, should be at least 2 and less than max_iter
 
@@ -18,27 +18,27 @@ EOM:
 
 Consumers: # consumers by zones
   A:
-    WTP: 10000.0 # Max clearing price (€/MWh)
+    WTP: 20000 #20000.0 # Max clearing price (€/MWh)
     D: "A" # Demand timeseries that needs to be picked up
-    ela: 0.2 # fraction of demand that is elastic # 0.08 at WTP = 4000, 0.2 at WTP = 10000
-    sigmaCM: 0 # if 0, change scarcity data to 0
+    ela: 0.2 # fraction of demand that is elastic # 0.04 at WTP = 4000, 0.2 at WTP = 20000
+    sigmaCM: 1 # if 0, change scarcity data to 0
     NodeShare:
         n1: 0.7
         n2: 0.3
 
   B:
-    WTP: 10000.0 # Max clearing price (€/MWh)
+    WTP: 20000 #20000.0 # Max clearing price (€/MWh)
     D: "B" # Timeseries that needs to be picked up
     ela: 0.2 # fraction of demand that is elastic
-    sigmaCM: 0
+    sigmaCM: 1
     NodeShare:
         n3: 1.0
 
   C:
-    WTP: 10000.0 # Max clearing price (€/MWh)
+    WTP: 20000 #20000.0 # Max clearing price (€/MWh)
     D: "C" # Timeseries that needs to be picked up
     ela: 0.2 # fraction of demand that is elastic
-    sigmaCM: 0
+    sigmaCM: 1
     NodeShare:
         n4: 1.0
 
@@ -52,6 +52,7 @@ Generators:
       I: 190000 # €/MW-year - annualized investment cost (convert to €/MW-year?)
       max_cap: 100000 # MW - maximum capacity
       sigmaCM: 1
+      DF: 1.0 # derating factor
       NodeShare:
           n1: 0.5
           n2: 0.5
@@ -63,6 +64,7 @@ Generators:
       I: 110000 # €/MW-year - annualized investment cost
       max_cap: 100000 # MW - maximum capacity
       sigmaCM: 1
+      DF: 1.0 # derating factor
       NodeShare:
           n1: 0.5
           n2: 0.5
@@ -74,6 +76,7 @@ Generators:
       I: 80000 # €/MW-year - annualized investment cost
       max_cap: 100000 # MW - maximum capacity
       sigmaCM: 1
+      DF: 1.0 # derating factor
       NodeShare:
           n1: 0.5
           n2: 0.5
@@ -86,6 +89,7 @@ Generators:
       max_cap: 72618 # MW - maximum capacity
       AF: "A"
       sigmaCM: 0
+      DF: 0 # derating factor
       NodeShare:
           n1: 0.5
           n2: 0.5
@@ -97,6 +101,7 @@ Generators:
       max_cap: 86952 # MW - maximum capacity
       AF: "A"
       sigmaCM: 0
+      DF: 0 # derating factor
       NodeShare:
           n1: 0.5
           n2: 0.5
@@ -108,6 +113,7 @@ Generators:
       I: 180000 # €/MW-year - annualized investment cost (convert to €/MW-year?)
       max_cap: 100000 # MW - maximum capacity
       sigmaCM: 1
+      DF: 1.0 # derating factor
       NodeShare:
           n3: 1.0
 
@@ -118,6 +124,7 @@ Generators:
       I: 100000 # €/MW-year - annualized investment cost
       max_cap: 100000 # MW - maximum capacity
       sigmaCM: 1
+      DF: 1.0 # derating factor
       NodeShare:
           n3: 1.0
 
@@ -128,6 +135,7 @@ Generators:
       I: 70000 # €/MW-year - annualized investment cost
       max_cap: 100000 # MW - maximum capacity
       sigmaCM: 1
+      DF: 1.0 # derating factor
       NodeShare:
           n3: 1.0
 
@@ -139,6 +147,7 @@ Generators:
       max_cap: 5439 # MW - maximum capacity
       AF: "B"
       sigmaCM: 0
+      DF: 0 # derating factor
       NodeShare:
           n3: 1.0
 
@@ -150,6 +159,7 @@ Generators:
       max_cap: 10794 # MW - maximum capacity
       AF: "B"
       sigmaCM: 0
+      DF: 0 # derating factor
       NodeShare:
           n3: 1.0
 
@@ -161,6 +171,7 @@ Generators:
       I: 170000 # €/MW-year - annualized investment cost (convert to €/MW-year?)
       max_cap: 100000 # MW - maximum capacity
       sigmaCM: 1
+      DF: 1.0 # derating factor
       NodeShare:
           n4: 1.0
 
@@ -171,6 +182,7 @@ Generators:
       I: 90000 # €/MW-year - annualized investment cost
       max_cap: 100000 # MW - maximum capacity
       sigmaCM: 1
+      DF: 1.0 # derating factor
       NodeShare:
           n4: 1.0
 
@@ -181,6 +193,7 @@ Generators:
       I: 60000 # €/MW-year - annualized investment cost
       max_cap: 100000 # MW - maximum capacity
       sigmaCM: 1
+      DF: 1.0 # derating factor
       NodeShare:
           n4: 1.0
 
@@ -192,6 +205,7 @@ Generators:
       max_cap: 11706 # MW - maximum capacity
       AF: "C"
       sigmaCM: 0
+      DF: 0 # derating factor
       NodeShare:
           n4: 1.0
 
@@ -203,6 +217,7 @@ Generators:
       max_cap: 27259 # MW - maximum capacity
       AF: "C"
       sigmaCM: 0
+      DF: 0 # derating factor
       NodeShare:
           n4: 1.0
 
@@ -244,12 +259,16 @@ Network:
     - [C, B]
     - [B, A]
 
+  reserve_cost: 10000000 # €/MW-year
+
+    
+
   nLines: 4
   nScenarios: 4
   lines: "lines"  # lines dataframe
   ptdf: "ptdf"  # PTDF dataframe
   nodal_ptdf: "nodal_ptdf"  # nodal PTDF dataframe
-  coupling: "FB"  # or "FB" or "ATC"
+  coupling: "ATC"  # or "FB" or "ATC"
   IC_reserve: 500000 # €/MW-year higher than the highest fixed cost
   MC_reserve: 20000 # €/MWh higher than voll
 

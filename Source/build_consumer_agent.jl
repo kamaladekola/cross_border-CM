@@ -60,7 +60,7 @@ function build_consumer_agent!(mod::Model, m::String, zones::Vector{String})
 
     for jz in JZ
         if zones[jz] == z
-            mod.ext[:constraints][Symbol("CD_$jz")] = @constraint(mod, cap_cm[jz] >= σ_CM * PM[m][zones[jz]] * (1 + CD_margin) * CD)
+            mod.ext[:constraints][Symbol("CD_$jz")] = @constraint(mod, cap_cm[jz] >= σ_CM * PM[m][zones[jz]] * (1 - CD_margin) * CD)
             mod.ext[:constraints][Symbol("CD_upper_$jz")] = @constraint(mod, cap_cm[jz] <= σ_CM * PM[m][zones[jz]] * (1 + CD_margin) * CD)
         else
             mod.ext[:constraints][Symbol("CD_$jz")] = @constraint(mod, cap_cm[jz] >= 0.0)

@@ -44,7 +44,7 @@ function build_generator_agent!(mod::Model, m::String, zones::Vector{String})
         + σ_CM * ρ_CM[home_zone]/2 * (sum(cap_cm[jz] for jz in JZ) - cap_bar[home_zone])^2  # ADMM penalty term for CM
     )
 
-    # Nodal available capacity (existing + new), scaled by AF
+    # Nodal available capacity expression
     mod.ext[:expressions][:y_nodal] = @expression(mod, [jh in JH, jn in JN],
         y_init * node_share[jn] * AF[jh]
     )

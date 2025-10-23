@@ -27,8 +27,12 @@ function define_capacityIC_parameters!(mod::Model, data::Dict, zones::Vector{Str
     
     # Set capacity market parameters
     mod.ext[:parameters][:CapCM_zonal] = zeros(length(zones))
+    mod.ext[:parameters][:y_bar_nodal] = zeros(length(node_syms))
+
     capacity_demand_zonal = [get(data["CM"][zone], "capacity_target", 0.0) for zone in zones]
     mod.ext[:parameters][:Cap_Demand_nodal] = vec(M' * capacity_demand_zonal)
+
+
     
     
     # Store TCONNECT from network configuration

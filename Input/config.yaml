@@ -8,8 +8,8 @@ General:
 ADMM:
   rho_EOM: 1 # rho ADMM penalty term, EOM
   rho_CM: 1 # rho ADMM penalty term, CM
-  max_iter: 5000
-  epsilon: 0.1 # 0.1 # stopping criterion - tolerance on "accuracy" with which the coupling constraints are satisfied. Applied to dual and primal residuals.
+  max_iter: 10000
+  epsilon: 0.15 # 0.1 # stopping criterion - tolerance on "accuracy" with which the coupling constraints are satisfied. Applied to dual and primal residuals.
   CircularBufferSize: 5 # number of iterations for which data will be retained, should be at least 2 and less than max_iter
 
 EOM: 
@@ -21,7 +21,7 @@ Consumers: # consumers by zones
     WTP: 4000 # Max clearing price (€/MWh)
     D: "A" # Demand timeseries that needs to be picked up
     ela: 0.04 # fraction of demand that is elastic # 0.04 at WTP = 4000, 0.2 at WTP = 20000
-    sigmaCM: 1 # if 0, change scarcity data to 0
+    sigmaCM: 1 
     NodeShare:
         n1: 0.7
         n2: 0.3
@@ -224,21 +224,21 @@ Generators:
 CM:
   A:
 
-    capacity_target: 50053.68 # MW (capacity target for zone A)
+    capacity_target: 55397.05 # MW (capacity target for zone A)
     price_target: 80000.0    # €/MW (price target for zone A)
     capacity_margin: 0.0     # 0% capacity margin
     min_price: -10000000
     max_price: 10000000
     D: "A" #
   B:
-    capacity_target: 12306.85  # MW (capacity target for zone B)
+    capacity_target: 17285.76  # MW (capacity target for zone B)
     price_target: 70000.0
     capacity_margin: 0.0
     min_price: -10000000
     max_price: 10000000
     D: "B"
   C:
-    capacity_target: 16338.68  # MW (capacity target for zone C)
+    capacity_target: 15712.57  # MW (capacity target for zone C)
     price_target: 60000.0
     capacity_margin: 0.0
     min_price: -10000000
@@ -258,13 +258,13 @@ Network:
 
   ATC:
     A:
-      C: [3000.0, -3000.0]  # [forward limit, backward limit]
+      C: [2680.2, -2680.2]  # [forward limit, backward limit]
     C:
-      B: [1884.47, -1884.47]
+      B: [2058.0, -2058.0]
     B: 
-      A: [2557.77, -2557.77]
+      A: [1377.8, -1377.8]
 
-  reserve_cost: 10000000 # €/MW-year
+  reserve_cost: 500000 # €/MW-year
     
 
   nLines: 4
@@ -273,7 +273,7 @@ Network:
   ptdf: "ptdf"  # PTDF dataframe
   nodal_ptdf: "nodal_ptdf"  # nodal PTDF dataframe
   coupling: "FB"  # or "FB" or "ATC" or "None" for noCBP & implicit CBP
-  IC_reserve: 500000 # €/MW-year higher than the highest fixed cost
-  MC_reserve: 20000 # €/MWh higher than voll
+  # IC_reserve: 500000 # €/MW-year higher than the highest fixed cost
+  # MC_reserve: 50000 # €/MWh higher than voll
 
 

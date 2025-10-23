@@ -26,6 +26,9 @@ function build_capacityIC_agent!(mod::Model)
     λ_CM = mod.ext[:parameters][:λ_CM]
     ρ_CM = mod.ext[:parameters][:ρ_CM]
     
+    y_bar_nodal = mod.ext[:parameters][:y_bar_nodal]
+
+    
     # Variables
     cap_cm = mod.ext[:variables][:cap_cm] = @variable(mod, [jz=JZ], base_name = "netposition")                     # net position: positive => import
     r_cm = mod.ext[:variables][:r_cm] = @variable(mod, [js=JS, jn=JN], base_name = "nodal_injection")          # nodal injections
@@ -62,11 +65,15 @@ function build_capacityIC_agent!(mod::Model)
 
         # g_scar ≤ CapCM_nodal + s_res
         mod.ext[:constraints][:cap_limit] =
-            @constraint(mod, [js in JS, jn in JN], g_scar[js, jn] <= CapCM_nodal[jn] + s_cm[jn])
+            @constraint(mod, [js in JS, jn in JN], g_scar[js, jn] <= y_bar_nodal[jn] + s_cm[jn])
+
+        # CapCM_nodal <= y_bar_nodal
+        mod.ext[:constraints][:capcm_limit] = @constraint(mod, [jn in JN], CapCM_nodal[jn] <= y_bar_nodal[jn])
 
         # zonal capacity allocation to nodes
         mod.ext[:constraints][:capacity_allocation] = @constraint(mod, [jz in JZ],
             sum(CapCM_nodal[jn] for jn in JN if zone_of_idx[jn] == jz) == CapCM_zonal[jz])
+
 
         # Zonal net positions from nodal injections (import-positive)
         #    cap_cm[z] >= - Σ_{n∈z} r_cm[js,n]  for ALL scenarios js  (robust deliverability)
@@ -111,6 +118,7 @@ function build_capacityIC_agent!(mod::Model)
             sum(ex_cm[t] for t in TCONNECT if t[2] == zone_syms[jz]) -
             sum(ex_cm[t] for t in TCONNECT if t[1] == zone_syms[jz])
         )
+
         
         # ATC limits on exchanges
         mod.ext[:constraints][:cap_cm_atc_limit] = @constraint(mod, [t in TCONNECT], 

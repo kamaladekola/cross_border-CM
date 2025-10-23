@@ -1,4 +1,3 @@
-
 function solve_capacityIC_agent!(mod::Model)
     
     # Sets
@@ -19,6 +18,7 @@ function solve_capacityIC_agent!(mod::Model)
     rc = mod.ext[:parameters][:reserve_cost]
     coupling = mod.ext[:parameters][:coupling]
 
+    y_bar_nodal = mod.ext[:parameters][:y_bar_nodal]
     
     # ADMM penalty parameters for capacity market
     cap_bar = mod.ext[:parameters][:cap_bar]
@@ -47,11 +47,11 @@ function solve_capacityIC_agent!(mod::Model)
 
     if coupling == "FB"
 
-        # for js in JS, jn in JN
-        #     delete(mod, mod.ext[:constraints][:cap_limit][js,jn])
-        # end
-        # mod.ext[:constraints][:cap_limit] =
-        #     @constraint(mod, [js in JS, jn in JN], g_scar[js, jn] <= CapCM_nodal[jn] + s_cm[jn])
+        for js in JS, jn in JN
+            delete(mod, mod.ext[:constraints][:cap_limit][js,jn])
+        end
+        mod.ext[:constraints][:cap_limit] =
+            @constraint(mod, [js in JS, jn in JN], g_scar[js, jn] <= y_bar_nodal[jn] + s_cm[jn])
 
         for jz in JZ
             delete(mod, mod.ext[:constraints][:capacity_allocation][jz])
@@ -59,6 +59,10 @@ function solve_capacityIC_agent!(mod::Model)
         mod.ext[:constraints][:capacity_allocation] = @constraint(mod, [jz in JZ],
             sum(CapCM_nodal[jn] for jn in JN if zone_of_idx[jn] == jz) == CapCM_zonal[jz])
 
+        for jn in JN
+            delete(mod, mod.ext[:constraints][:capcm_limit][jn])
+        end
+        mod.ext[:constraints][:capcm_limit] = @constraint(mod, [jn in JN], CapCM_nodal[jn] <= y_bar_nodal[jn])
 
     elseif coupling == "ATC"
         

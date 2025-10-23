@@ -10,7 +10,9 @@ function ADMM_subroutine!(m::String, results::Dict, ADMM::Dict, EOM::Dict, CM::D
 
             for gen in agents[:Gen]
                 Y_nodal .+= results["y_nodal"][gen][end]
-                Y_zonal .+= results["y"][gen][end]
+                gen_zone, _ = parse_agent_name(gen)
+                gen_zone_idx = findfirst(z -> z == gen_zone, zones)
+                Y_zonal[gen_zone_idx] += results["y"][gen][end]
             end
 
             for cons in agents[:Cons]
@@ -49,6 +51,10 @@ function ADMM_subroutine!(m::String, results::Dict, ADMM::Dict, EOM::Dict, CM::D
         end
 
         mod.ext[:parameters][:CapCM_zonal] = CapCM_zonal
+        
+        # Pass the y_bar values from NetworkManager to CapacityManager
+        mod.ext[:parameters][:y_bar_nodal] = results["y_bar_nodal"]["NetworkManager"][end]
+        
         
         # if data["Network"]["coupling"] == "ATC"
         #     @timeit TO_local "Get ATC" begin
@@ -143,6 +149,8 @@ function ADMM_subroutine!(m::String, results::Dict, ADMM::Dict, EOM::Dict, CM::D
             end
         elseif m == "NetworkManager"
             push!(results["g"][m], collect(value.(mod.ext[:variables][:g])))
+            push!(results["y_bar_nodal"][m], collect(value.(mod.ext[:variables][:y_bar])))
+            
 
         elseif m == "CapacityManager"
             push!(results["cap_cm"][m], collect(value.(mod.ext[:variables][:cap_cm])))

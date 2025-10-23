@@ -50,6 +50,13 @@ function define_results!(data::Dict, results::Dict, ADMM::Dict, agents::Dict, zo
         push!(results["cap_cm"][m], zeros(length(zones)))
     end
 
+    # Store y_bar_nodal results
+    results["y_bar_nodal"] = Dict()
+    for m in agents[:IC]
+        results["y_bar_nodal"][m] = CircularBuffer{Vector{Float64}}(data["CircularBufferSize"])
+        push!(results["y_bar_nodal"][m], zeros(data["nNodes"]))
+    end
+
     # Prices for each zone in the EOM market
     results["λ"] = Dict()
     results["λ"]["EOM"] = Dict(z => CircularBuffer{Vector{Float64}}(data["CircularBufferSize"]) for z in zones)

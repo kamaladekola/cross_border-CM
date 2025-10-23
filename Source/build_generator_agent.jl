@@ -46,7 +46,7 @@ function build_generator_agent!(mod::Model, m::String, zones::Vector{String})
 
     # Nodal available capacity (existing + new), scaled by AF
     mod.ext[:expressions][:y_nodal] = @expression(mod, [jh in JH, jn in JN],
-        (y_init + y) * node_share[jn] * AF[jh]
+        y_init * node_share[jn] * AF[jh]
     )
 
     # Capacity limit constraint

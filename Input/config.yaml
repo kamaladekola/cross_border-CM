@@ -18,26 +18,26 @@ EOM:
 
 Consumers: # consumers by zones
   A:
-    WTP: 20000 #20000.0 # Max clearing price (€/MWh)
+    WTP: 4000 # Max clearing price (€/MWh)
     D: "A" # Demand timeseries that needs to be picked up
-    ela: 0.2 # fraction of demand that is elastic # 0.04 at WTP = 4000, 0.2 at WTP = 20000
+    ela: 0.04 # fraction of demand that is elastic # 0.04 at WTP = 4000, 0.2 at WTP = 20000
     sigmaCM: 1 # if 0, change scarcity data to 0
     NodeShare:
         n1: 0.7
         n2: 0.3
 
   B:
-    WTP: 20000 #20000.0 # Max clearing price (€/MWh)
+    WTP: 4000 #20000.0 # Max clearing price (€/MWh)
     D: "B" # Timeseries that needs to be picked up
-    ela: 0.2 # fraction of demand that is elastic
+    ela: 0.04 # fraction of demand that is elastic
     sigmaCM: 1
     NodeShare:
         n3: 1.0
 
   C:
-    WTP: 20000 #20000.0 # Max clearing price (€/MWh)
+    WTP: 4000 #20000.0 # Max clearing price (€/MWh)
     D: "C" # Timeseries that needs to be picked up
-    ela: 0.2 # fraction of demand that is elastic
+    ela: 0.04 # fraction of demand that is elastic
     sigmaCM: 1
     NodeShare:
         n4: 1.0
@@ -224,26 +224,23 @@ Generators:
 CM:
   A:
 
-    capacity_target: 59711.6 # explicit  -> demand + ens - (wind + solar) + import (peak residual demand)
-    # capacity_target: 59711.6 # implicit -> demand + ens - (wind + solar)
+    capacity_target: 50053.68 # MW (capacity target for zone A)
     price_target: 80000.0    # €/MW (price target for zone A)
-    capacity_margin: 0.15     # 20% capacity margin
+    capacity_margin: 0.0     # 0% capacity margin
     min_price: -10000000
     max_price: 10000000
     D: "A" #
   B:
-    capacity_target: 15045.7
-    # capacity_target: 12804.5 
+    capacity_target: 12306.85  # MW (capacity target for zone B)
     price_target: 70000.0
-    capacity_margin: 0.15
+    capacity_margin: 0.0
     min_price: -10000000
     max_price: 10000000
     D: "B"
   C:
-    capacity_target: 18175.3
-    # capacity_target: 16481.0 
+    capacity_target: 16338.68  # MW (capacity target for zone C)
     price_target: 60000.0
-    capacity_margin: 0.15
+    capacity_margin: 0.0
     min_price: -10000000
     max_price: 10000000
     D: "C"
@@ -259,8 +256,15 @@ Network:
     - [C, B]
     - [B, A]
 
-  reserve_cost: 10000000 # €/MW-year
+  ATC:
+    A:
+      C: [3000.0, -3000.0]  # [forward limit, backward limit]
+    C:
+      B: [1884.47, -1884.47]
+    B: 
+      A: [2557.77, -2557.77]
 
+  reserve_cost: 10000000 # €/MW-year
     
 
   nLines: 4
@@ -268,7 +272,7 @@ Network:
   lines: "lines"  # lines dataframe
   ptdf: "ptdf"  # PTDF dataframe
   nodal_ptdf: "nodal_ptdf"  # nodal PTDF dataframe
-  coupling: "ATC"  # or "FB" or "ATC"
+  coupling: "FB"  # or "FB" or "ATC" or "None" for noCBP & implicit CBP
   IC_reserve: 500000 # €/MW-year higher than the highest fixed cost
   MC_reserve: 20000 # €/MWh higher than voll
 

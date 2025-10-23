@@ -41,6 +41,9 @@ function solve_capacityIC_agent!(mod::Model)
         + sum(rc * s_cm[jn] for jn in JN)
         )
 
+    # constrain cap_cm to zero
+    # @constraint(mod, [jz in JZ], cap_cm[jz] == 0)
+
 
     if coupling == "FB"
 

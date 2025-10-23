@@ -330,7 +330,7 @@ function build_planner_eom(; data, load, pv, wind_on, nodal_ptdf_df, lines, weig
     Ren_cap = @constraint(model, [i in JI, z in JZ], sum(y_node[i, n] for n in JN if zone_of_node[n] == z) + y[i, z] <= max_cap[i, z])
 
     # link between zonal and nodal capacity (distorts zonal prices)
-    # alloc = @constraint(model, [i in JI, z in JZ], y[i, z] == sum(y_bar[i, n] for n in JN if zone_of_node[n] == z))
+    alloc = @constraint(model, [i in JI, z in JZ], y[i, z] == sum(y_bar[i, n] for n in JN if zone_of_node[n] == z))
 
     # DC power flow constraints
     fmap  = @constraint(model, [t in JH, l in JL], f[t, l] == sum(PTDF[l, n] * r[t, n] for n in JN))
@@ -357,7 +357,7 @@ function build_planner_eom(; data, load, pv, wind_on, nodal_ptdf_df, lines, weig
             :bal => bal, :agg => agg, :nbal => nbal, :cap => cap,
             :fmap => fmap, :therm => therm, :sbal => sbal,
             :zonal_cap => zonal_cap, :Ren_cap => Ren_cap,
-            # :alloc => alloc,
+            :alloc => alloc,
         ),
         :scalars => Dict(:ela => ela, :WTP => WTP),
         :expressions => Dict(:gen_cost => gen_cost, 
@@ -436,8 +436,8 @@ function solve_and_save(
 
 
     # extract dual of alloc
-    # dual_alloc = [dual(ext[:constraint][:alloc][i, z]) for i in JI, z in JZ] # show the dataframe in the terminal
-    # println(DataFrame(dual_alloc, :auto))
+    dual_alloc = [dual(ext[:constraint][:alloc][i, z]) for i in JI, z in JZ] # show the dataframe in the terminal
+    println(DataFrame(dual_alloc, :auto))
 
     # Existing capacity C[i,z] from input data (for totals)
     Cz = zeros(length(JI), length(JZ))

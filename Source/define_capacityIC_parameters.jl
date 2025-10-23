@@ -44,20 +44,23 @@ function define_capacityIC_parameters!(mod::Model, data::Dict, zones::Vector{Str
     # ATC parameter:
     mod.ext[:parameters][:ATC] = Dict{Tuple{Symbol,Symbol}, Tuple{Float64,Float64}}()
 
-    # for t in mod.ext[:parameters][:TCONNECT]
-    #     mod.ext[:parameters][:ATC][t] = (3000.0, -3000.0)
-    # end
-
-    if (:A, :C) in mod.ext[:parameters][:TCONNECT]
-        mod.ext[:parameters][:ATC][(:A, :C)] = (2000.0, -2000.0)
-    end
-
-    if (:C, :B) in mod.ext[:parameters][:TCONNECT]
-        mod.ext[:parameters][:ATC][(:C, :B)] = (2000.0, -2000.0)
-    end
-
-    if (:B, :A) in mod.ext[:parameters][:TCONNECT]
-        mod.ext[:parameters][:ATC][(:B, :A)] = (1000.0, -1000.0)
+    # Check if ATC exists in the config
+    if haskey(data["Network"], "ATC")
+        atc_data = data["Network"]["ATC"]
+        for from_zone in keys(atc_data)
+            for (to_zone, limits) in atc_data[from_zone]
+                from_sym = Symbol(from_zone)
+                to_sym = Symbol(to_zone)
+                forward_limit = Float64(limits[1])
+                backward_limit = Float64(limits[2])
+                mod.ext[:parameters][:ATC][(from_sym, to_sym)] = (forward_limit, backward_limit)
+            end
+        end
+    else
+        # Default values if no ATC in config
+        for t in mod.ext[:parameters][:TCONNECT]
+            mod.ext[:parameters][:ATC][t] = (2000.0, -2000.0)  # Default values
+        end
     end
 
     return mod

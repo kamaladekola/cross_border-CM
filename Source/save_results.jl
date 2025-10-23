@@ -47,9 +47,9 @@ function save_results(mdict::Dict, EOM::Dict, ADMM::Dict, results::Dict, data::D
                 zone_m, _ = parse_agent_name(m)
                 if zone_m == z
                     zone_df[!, "$(m)"] = results["g"][m][end]
-                    zone_df[!, "Capacity_$(m)"] = fill(results["y"][m][end], nT)
+                    zone_df[!, "new_capacity_$(m)"] = fill(results["y"][m][end], nT)
                     gen_name = get_agent_name(m)
-                    zone_df[!, "new_capacity_$(m)"] = fill(results["y"][m][end] - data["Generators"][zone_m][gen_name]["C"], nT)
+                    zone_df[!, "Capacity_$(m)"] = fill(results["y"][m][end] + data["Generators"][zone_m][gen_name]["C"], nT)
                     
                     if m in agents[:cm]
                         for (tgt_idx, target_z) in enumerate(zones)

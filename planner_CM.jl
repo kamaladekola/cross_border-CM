@@ -61,8 +61,9 @@ struct Params
     PTDF::Matrix{Float64} # L × N (power transfer distribution factors)
     Fmax::Vector{Float64} # L (thermal limits)
 
-    # CM parameters 
-    CD::Vector{Float64} # capacity demand per zone
+    # CM parameters
+    margins::Vector{Float64} # capacity margin per zone
+    CD_ref::Vector{Float64} # capacity demand per zone
     scarcity_matrix::Matrix{Float64} # S × Z demand in scarcity scenarios
 end
 
@@ -258,15 +259,19 @@ function define_parameters(data, load, pv, wind_on, nptdf, lines, weights, scarc
     Fmax = Float64.(safe_col(lines, :Fmax))
     @assert size(PTDF,1) == L "PTDF rows must match number of lines"
 
-    # Capacity demand per zone
-    CD = zeros(Float64, sets.Z)
+    margins = zeros(Float64, sets.Z)
     for (zidx, z) in enumerate(sets.zones)
-        CD[zidx] = Float64(get_any(data["CM"][z], "capacity_target"))
+        margins[zidx] = Float64(get_any(data["CM"][z], "capacity_margin"))
+    end
+
+    # Capacity demand per zone
+    CD_ref = zeros(Float64, sets.Z)
+    for (zidx, z) in enumerate(sets.zones)
+        CD_ref[zidx] = Float64(get_any(data["CM"][z], "capacity_target"))
     end
 
     scarcity_matrix = Matrix{Float64}(scarcity_df[:, sets.zones])
-
-    return Params(Float64.(weights[1:H]), D_zonal, AV, y_node, MC, max_cap, A, IC, S, PTDF, Fmax, CD, scarcity_matrix), ela, WTP
+    return Params(Float64.(weights[1:H]), D_zonal, AV, y_node, MC, max_cap, A, IC, S, PTDF, Fmax, margins, CD_ref, scarcity_matrix), ela, WTP
 end
 
 function build_planner_cm(; data, load, pv, wind_on, nodal_ptdf_df, lines, weights, scarcity_df)
@@ -279,7 +284,7 @@ function build_planner_cm(; data, load, pv, wind_on, nodal_ptdf_df, lines, weigh
     JH, JZ, JN, JI, JL, JS = sets.JH, sets.JZ, sets.JN, sets.JI, sets.JL, sets.JS
     W, D_zonal, AV, y_node = params.W, params.D_zonal, params.AV, params.y_node
     MC, max_cap, A, IC, PTDF, Fmax, S = params.MC, params.max_cap, params.A, params.IC, params.PTDF, params.Fmax, params.S
-    CD, scarcity_matrix = params.CD, params.scarcity_matrix
+    CD_ref, scarcity_matrix, margins = params.CD_ref, params.scarcity_matrix, params.margins
     zone_of_node = maps.zone_of_node
    
     # EOM Variables
@@ -301,6 +306,7 @@ function build_planner_cm(; data, load, pv, wind_on, nodal_ptdf_df, lines, weigh
     @variable(model, r_cm[JS, JN])                  # nodal net position in CM scenarios
     @variable(model, f_cm[JS, JL])                  # line flows in CM scenarios
     @variable(model, p_cm[JZ])                      # zonal capacity net positions
+    @variable(model, CD[JZ] >= 0)                # capacity demand in CM per zone
 
 
     # negative utility function per zone
@@ -369,47 +375,128 @@ function build_planner_cm(; data, load, pv, wind_on, nodal_ptdf_df, lines, weigh
     # zonal capacity limits
     zonal_cap = @constraint(model, [t in JH, i in JI, z in JZ], g[t, i, z] <= AV[t, i, z] * (y[i, z] + sum(y_node[i, n] for n in JN if zone_of_node[n] == z)))
 
+    cm_demand_lower = @constraint(model, [z in JZ], CD[z] >= CD_ref[z] * (1 - margins[z]))
+    cm_demand_upper = @constraint(model, [z in JZ], CD[z] <= CD_ref[z] * (1 + margins[z]))
+
+    # initialize
+    cm_bal = nothing
+    cm_cap = nothing
+    cm_alloc = nothing
+    cm_gen = nothing
+    cm_nbal = nothing
+    cm_agg = nothing
+    cm_fmap = nothing
+    cm_therm = nothing
+    cm_sbal = nothing
+    cm_gbal = nothing
+    cm_netpos = nothing
+    cm_atc_limit = nothing
+
+
     ### capacity market constraints (Flow-based)
 
-    # # zonal balance in CM -> capacity sold in CM per zone = capacity manager net position in CM + capacity demand in zone
-    cm_bal = @constraint(model, [z in JZ], sum(cap_cm[i, z] for i in JI) - CD[z] + p_cm[z] == 0) # imports positive
+    if data["Network"]["coupling"] == "FB"
+        # # zonal balance in CM -> capacity sold in CM per zone = capacity manager net position in CM + capacity demand in zone
+        cm_bal = @constraint(model, [z in JZ], sum(cap_cm[i, z] for i in JI) - CD[z] + p_cm[z] == 0) # imports positive
 
-    # # Capacity limits:
-    cm_cap = @constraint(model, [i in JI, n in JN], cap_cm_bar[i, n] <= y_bar[i, n])
-    
-    # Link between zonal and nodal capacity in CM -> sum of nodal capacity offer in CM == nodal capacity sold in CM
-    cm_alloc = @constraint(model, [i in JI, z in JZ], cap_cm[i, z] == sum(cap_cm_bar[i, n] for n in JN if zone_of_node[n] == z))
-
-
-    # nodal capacity generation in CM <= derated capacity offer in CM
-    # cm_gen = @constraint(model, [s in JS, i in JI, n in JN], g_cm[s, i, n] <= cap_cm_bar[i, n])
-    cm_gen = @constraint(model, [s in JS, i in JI, n in JN], g_cm[s, i, n] <= y_bar[i, n])
-
-
-    nodal_capacity_demand = @expression(model, [n in JN], S[zone_of_node[n], n] * CD[zone_of_node[n]])
+        # # Capacity limits:
+        cm_cap = @constraint(model, [i in JI, n in JN], cap_cm_bar[i, n] <= y_bar[i, n])
         
-    scarcity_demand = @expression(model, [s in JS, n in JN], scarcity_matrix[s, zone_of_node[n]] * nodal_capacity_demand[n])
+        # Link between zonal and nodal capacity in CM -> sum of nodal capacity offer in CM == nodal capacity sold in CM
+        cm_alloc = @constraint(model, [i in JI, z in JZ], cap_cm[i, z] == sum(cap_cm_bar[i, n] for n in JN if zone_of_node[n] == z))
 
-    # nodal balance
-    cm_nbal = @constraint(model, [s in JS, n in JN], r_cm[s, n] == sum(g_cm[s, i, n] for i in JI) - scarcity_demand[s, n])
 
-    # capacity net position in CM = sum of nodal capacity net positions in CM
-    cm_agg = @constraint(model, [s in JS, z in JZ], p_cm[z] >= - sum(r_cm[s, n] for n in JN if zone_of_node[n] == z))
+        # nodal capacity generation in CM <= derated capacity offer in CM
+        # cm_gen = @constraint(model, [s in JS, i in JI, n in JN], g_cm[s, i, n] <= cap_cm_bar[i, n])
+        cm_gen = @constraint(model, [s in JS, i in JI, n in JN], g_cm[s, i, n] <= y_bar[i, n])
 
-    # DC power flow for power delivery during scarcity scenario in CM
-    cm_fmap = @constraint(model, [s in JS, l in JL], f_cm[s, l] == sum(PTDF[l, n] * r_cm[s, n] for n in JN))
 
-    # Thermal limits in scarcity scenarios
-    cm_therm = @constraint(model, [s in JS, l in JL], -Fmax[l] <= f_cm[s, l] <= Fmax[l])
+        nodal_capacity_demand = @expression(model, [n in JN], S[zone_of_node[n], n] * CD[zone_of_node[n]])
+            
+        scarcity_demand = @expression(model, [s in JS, n in JN], scarcity_matrix[s, zone_of_node[n]] * nodal_capacity_demand[n])
 
-    # System balance in scarcity scenarios -> sum of nodal net positions in CM == 0
-    cm_sbal = @constraint(model, [s in JS], sum(r_cm[s, n] for n in JN) == 0)
-    cm_gbal = @constraint(model, sum(p_cm[z] for z in JZ) == 0)
+        # nodal balance
+        cm_nbal = @constraint(model, [s in JS, n in JN], r_cm[s, n] == sum(g_cm[s, i, n] for i in JI) - scarcity_demand[s, n])
+
+        # capacity net position in CM = sum of nodal capacity net positions in CM
+        cm_agg = @constraint(model, [s in JS, z in JZ], p_cm[z] >= - sum(r_cm[s, n] for n in JN if zone_of_node[n] == z))
+
+        # DC power flow for power delivery during scarcity scenario in CM
+        cm_fmap = @constraint(model, [s in JS, l in JL], f_cm[s, l] == sum(PTDF[l, n] * r_cm[s, n] for n in JN))
+
+        # Thermal limits in scarcity scenarios
+        cm_therm = @constraint(model, [s in JS, l in JL], -Fmax[l] <= f_cm[s, l] <= Fmax[l])
+
+        # System balance in scarcity scenarios -> sum of nodal net positions in CM == 0
+        cm_sbal = @constraint(model, [s in JS], sum(r_cm[s, n] for n in JN) == 0)
+        
+        cm_gbal = @constraint(model, sum(p_cm[z] for z in JZ) == 0)
 
     # Capacity market constraints (ATCMC)
-    # Add ATC parameter - # ATC = zeros(Float64, I, Z)
-    # -atc <=cap_cm <= atc
-    # atc = @constraint(model, [i in JI, z in JZ], -ATC[i, z] <= cap_cm[i, z] <= ATC[i, z])
+    elseif data["Network"]["coupling"] == "ATC"
+        # Parse ATC data from config
+        atc_data = data["Network"]["ATC"]
+        ATC = Dict{Tuple{Symbol,Symbol}, Tuple{Float64,Float64}}()
+        
+        # Parse TCONNECT data - interconnected zones
+        TCONNECT = [(Symbol(t[1]), Symbol(t[2])) for t in data["Network"]["TCONNECT"]]
+        
+        # Build ATC dictionary with forward/backward limits
+        for from_zone in keys(atc_data)
+            for (to_zone, limits) in atc_data[from_zone]
+                from_sym = Symbol(from_zone)
+                to_sym = Symbol(to_zone)
+                forward_limit = Float64(limits[1])
+                backward_limit = Float64(limits[2])
+                ATC[(from_sym, to_sym)] = (forward_limit, backward_limit)
+            end
+        end
+        
+        # Create capacity exchange variables
+        @variable(model, ex_cm[t in TCONNECT], base_name="ex_cm")
+        
+        # Zone to symbol mapping for constraint reference
+        zone_syms = Symbol.(sets.zones)
+                
+        # zonal balance in CM -> capacity sold in CM per zone = capacity manager net position in CM + capacity demand in zone
+        cm_bal = @constraint(model, [z in JZ], sum(cap_cm[i, z] for i in JI) - CD[z] + p_cm[z] == 0) # imports positive
+
+        # Capacity limits:
+        cm_cap = @constraint(model, [i in JI, n in JN], cap_cm_bar[i, n] <= y_bar[i, n])
+        
+        # Link between zonal and nodal capacity in CM -> sum of nodal capacity offer in CM == nodal capacity sold in CM
+        cm_alloc = @constraint(model, [i in JI, z in JZ], cap_cm[i, z] == sum(cap_cm_bar[i, n] for n in JN if zone_of_node[n] == z))
+
+        # nodal capacity generation in CM <= derated capacity offer in CM
+        # cm_gen = @constraint(model, [s in JS, i in JI, n in JN], g_cm[s, i, n] <= cap_cm_bar[i, n])
+        cm_gen = @constraint(model, [s in JS, i in JI, n in JN], g_cm[s, i, n] <= y_bar[i, n])
+
+        # Global balance constraint (sum of net positions = 0)
+        cm_gbal = @constraint(model, sum(p_cm[z] for z in JZ) == 0)
+        
+        # Define zonal net positions based on exchanges
+        cm_netpos = @constraint(model, [z in JZ],
+            p_cm[z] == 
+            sum(ex_cm[t] for t in TCONNECT if t[2] == zone_syms[z]) -
+            sum(ex_cm[t] for t in TCONNECT if t[1] == zone_syms[z])
+        )
+        
+        # ATC limits on exchanges
+        cm_atc_limit = @constraint(model, [t in TCONNECT], 
+            ATC[t][2] <= ex_cm[t] <= ATC[t][1]
+        )
+        
+    else
+        # constrain capacity trade to zero
+        @constraint(model, [z in JZ], p_cm[z] == 0)
+                # zonal balance in CM -> capacity sold in CM per zone = capacity manager net position in CM + capacity demand in zone
+        cm_bal = @constraint(model, [z in JZ], sum(cap_cm[i, z] for i in JI) - CD[z] == 0) # imports positive
+
+        # cap_cm must be less than installed capacity in the zone
+        cm_cap = @constraint(model, [i in JI, z in JZ], cap_cm[i, z] <= sum(y_bar[i, n] for n in JN if zone_of_node[n] == z))
+
+    end
+
 
 
     model.ext = Dict{Symbol,Any}(
@@ -420,7 +507,7 @@ function build_planner_cm(; data, load, pv, wind_on, nodal_ptdf_df, lines, weigh
             :y => y, :y_bar => y_bar, :g => g, :g_bar => g_bar,
             :r => r, :f => f, :p => p, :d_inel => d_inel, :d_ela => d_ela,
             :cap_cm => cap_cm, :cap_cm_bar => cap_cm_bar, :g_cm => g_cm, 
-            :r_cm => r_cm, :f_cm => f_cm, :p_cm => p_cm
+            :r_cm => r_cm, :f_cm => f_cm, :p_cm => p_cm, :CD => CD
         ),
         :constraint => Dict(
             :bal => bal, :agg => agg, :nbal => nbal, :cap => cap,
@@ -496,6 +583,7 @@ function solve_and_save(
     capcmbar_var = vars[:cap_cm_bar]  # (I,N)   capacity sold in CM at nodal level
     gcm_var   = vars[:g_cm]        # (S,I,N) capacity deployed at nodal level in scarcity
     pcm_var   = vars[:p_cm]        # (Z)     zonal capacity net positions
+    CD_var   = vars[:CD]        # (Z)     capacity demand in CM per zone
 
 
     capacity     = value.(y_var)
@@ -511,6 +599,7 @@ function solve_and_save(
     # println(cap_cm_bar)
     gen_cm   = value.(gcm_var)
     pos_cm   = value.(pcm_var)
+    capacity_demand = value.(CD_var)
 
     # Zonal prices (€/MWh) from balance duals, unweighted
     W = params.W
@@ -552,11 +641,13 @@ function solve_and_save(
             end
 
         cons_total = inel[:, zidx] .+ elastic[:, zidx]
+
         ens = value.(expressions[:ens])[:, zidx]
 
         df[!, Symbol("Cons_$(z)")]           = cons_total
         df[!, Symbol("Inelastic_Cons_$(z)")] = inel[:, zidx]
         df[!, Symbol("Elastic_Cons_$(z)")]   = elastic[:, zidx]
+        df[!, Symbol("CapDemand_Cons_$(z)")] = fill(capacity_demand[zidx], length(JH))
         df[!, :NetworkManager]               = -1 * net_pos[:, zidx] # imports positive
         df[!, :CapacityManager] = fill(capacity_manager[zidx], length(JH))
         df[!, Symbol("ENS_Cons_$(z)")]       = ens
@@ -634,3 +725,54 @@ cp_cm = solve_and_save(
     output_dir=joinpath(@__DIR__, "Results", "Planner_CM")
 )
 @show objective_value(cp_cm[:model])
+
+# # Get y_node (existing capacity parameter)
+# model = cp_cm[:model]
+# params = model.ext[:params]
+# sets = model.ext[:sets]
+# maps = model.ext[:maps]
+# y_node = params.y_node  # This is the existing capacity matrix (I×N)
+
+# # Get y_bar (new capacity allocation variable)
+# vars = model.ext[:vars]
+# y_bar_var = vars[:y_bar]
+# y_bar_values = value.(y_bar_var)  # This is the optimal new capacity allocation (I×N)
+
+# # Create DataFrame for existing capacity
+# sets = cp_cm[:model].ext[:sets]
+# techs = sets.techs
+# nodes = sets.nodes
+
+# existing_capacity_df = DataFrame(
+#     Technology = repeat(String.(techs), sets.N),
+#     Node = repeat(String.(nodes), inner = sets.I),
+#     ExistingCapacity = vec(y_node)
+# )
+
+# # Create DataFrame for new capacity allocation
+# new_capacity_df = DataFrame(
+#     Technology = repeat(String.(techs), sets.N),
+#     Node = repeat(String.(nodes), inner = sets.I),
+#     NewCapacity = vec(y_bar_values)
+# )
+
+# # Add y_node to y_bar to get total capacity per (i,n)
+# total_capacity_df = copy(existing_capacity_df)
+# total_capacity_df[!, :TotalCapacity] = existing_capacity_df[!, :ExistingCapacity] .+ new_capacity_df[!, :NewCapacity]
+
+# # Calculate total capacity per node (summing across all technologies)
+# node_summary_df = combine(
+#     groupby(total_capacity_df, :Node),
+#     :ExistingCapacity => sum => :ExistingCapacity,
+#     :TotalCapacity => sum => :TotalCapacity
+# )
+
+# # Calculate new capacity per node
+# node_summary_df[!, :NewCapacity] = node_summary_df[!, :TotalCapacity] .- node_summary_df[!, :ExistingCapacity]
+
+# # Print results
+# # println("Total capacity by technology and node:")
+# # println(total_capacity_df)
+# println("\nTotal capacity by node:")
+# println(node_summary_df)
+

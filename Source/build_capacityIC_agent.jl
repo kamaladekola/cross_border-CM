@@ -96,6 +96,7 @@ function build_capacityIC_agent!(mod::Model)
         TCONNECT = mod.ext[:parameters][:TCONNECT]
         ATC = mod.ext[:parameters][:ATC]
         ex_cm = mod.ext[:variables][:ex_cm] = @variable(mod, [t in TCONNECT], base_name="ex_cm")
+        
 
         mod.ext[:constraints][:cap_limit] = @constraint(mod, [js in JS, jz in JZ], sum(g_scar[js, jn]  for jn in JN if zone_of_idx[jn] == jz) <= CapCM_zonal[jz] + sum(s_cm[jn] for jn in JN if zone_of_idx[jn] == jz))
 
@@ -115,6 +116,9 @@ function build_capacityIC_agent!(mod::Model)
         mod.ext[:constraints][:cap_cm_atc_limit] = @constraint(mod, [t in TCONNECT], 
             ATC[t][2] <= ex_cm[t] <= ATC[t][1]
         )
+    else
+        # constrain cap_cm to zero
+        @constraint(mod, [jz in JZ], cap_cm[jz] == 0)
     end
     
     return mod

@@ -9,7 +9,7 @@ ADMM:
   rho_EOM: 1 # rho ADMM penalty term, EOM
   rho_CM: 1 # rho ADMM penalty term, CM
   max_iter: 10000
-  epsilon: 0.15 # 0.1 # stopping criterion - tolerance on "accuracy" with which the coupling constraints are satisfied. Applied to dual and primal residuals.
+  epsilon: 0.1 # 0.1 # stopping criterion - tolerance on "accuracy" with which the coupling constraints are satisfied. Applied to dual and primal residuals.
   CircularBufferSize: 5 # number of iterations for which data will be retained, should be at least 2 and less than max_iter
 
 EOM: 
@@ -225,22 +225,22 @@ CM:
   A:
 
     capacity_target: 55397.05 # MW (capacity target for zone A)
-    price_target: 80000.0    # €/MW (price target for zone A)
-    capacity_margin: 0.0     # 0% capacity margin
+    price_target: 1000000.0    # €/MW (price target for zone A)
+    capacity_margin: 0.1     # 0% capacity margin
     min_price: -10000000
     max_price: 10000000
     D: "A" #
   B:
     capacity_target: 17285.76  # MW (capacity target for zone B)
-    price_target: 70000.0
-    capacity_margin: 0.0
+    price_target: 1000000.0
+    capacity_margin: 0.1
     min_price: -10000000
     max_price: 10000000
     D: "B"
   C:
     capacity_target: 15712.57  # MW (capacity target for zone C)
-    price_target: 60000.0
-    capacity_margin: 0.0
+    price_target: 1000000.0
+    capacity_margin: 0.1
     min_price: -10000000
     max_price: 10000000
     D: "C"
@@ -264,15 +264,15 @@ Network:
     B: 
       A: [1377.8, -1377.8]
 
-  reserve_cost: 500000 # €/MW-year
+  reserve_cost: 1000000 # €/MW-year
     
 
   nLines: 4
   nScenarios: 4
   lines: "lines"  # lines dataframe
-  ptdf: "ptdf"  # PTDF dataframe
+  ptdf: "ATC"  # PTDF dataframe
   nodal_ptdf: "nodal_ptdf"  # nodal PTDF dataframe
-  coupling: "FB"  # or "FB" or "ATC" or "None" for noCBP & implicit CBP
+  coupling: "FB"  # "FB" / "ATC" / "noCBP" / "implicit" / "none"
   # IC_reserve: 500000 # €/MW-year higher than the highest fixed cost
   # MC_reserve: 50000 # €/MWh higher than voll
 

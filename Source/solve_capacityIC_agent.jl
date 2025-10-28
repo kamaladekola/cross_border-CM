@@ -44,45 +44,24 @@ function solve_capacityIC_agent!(mod::Model)
     # constrain cap_cm to zero
     # @constraint(mod, [jz in JZ], cap_cm[jz] == 0)
 
-
-    if coupling == "FB"
-
-        for js in JS, jn in JN
-            delete(mod, mod.ext[:constraints][:cap_limit][js,jn])
-        end
-        mod.ext[:constraints][:cap_limit] =
-            @constraint(mod, [js in JS, jn in JN], g_scar[js, jn] <= y_bar_nodal[jn] + s_cm[jn])
-
-        for jz in JZ
-            delete(mod, mod.ext[:constraints][:capacity_allocation][jz])
-        end
-        mod.ext[:constraints][:capacity_allocation] = @constraint(mod, [jz in JZ],
-            sum(CapCM_nodal[jn] for jn in JN if zone_of_idx[jn] == jz) == CapCM_zonal[jz])
-
-        for jn in JN
-            delete(mod, mod.ext[:constraints][:capcm_limit][jn])
-        end
-        mod.ext[:constraints][:capcm_limit] = @constraint(mod, [jn in JN], CapCM_nodal[jn] <= y_bar_nodal[jn])
-
-    elseif coupling == "ATC"
-        
-        TCONNECT = mod.ext[:parameters][:TCONNECT]
-        # ATC = mod.ext[:parameters][:ATC]
-        ex_cm = mod.ext[:variables][:ex_cm]
-
-        for js in JS, jz in JZ
-            delete(mod, mod.ext[:constraints][:cap_limit][js,jz])
-        end
-        mod.ext[:constraints][:cap_limit] = @constraint(mod, [js in JS, jz in JZ], sum(g_scar[js, jn]  for jn in JN if zone_of_idx[jn] == jz) <= CapCM_zonal[jz] + sum(s_cm[jn] for jn in JN if zone_of_idx[jn] == jz))
-
-        
-        # ATC limits on exchanges
-        # for js in JS, t in TCONNECT
-        #     delete(mod, mod.ext[:constraints][:cap_cm_atc_limit][js,t])
-        # end
-        # mod.ext[:constraints][:cap_cm_atc_limit] = @constraint(mod, [js in JS, t in TCONNECT], 
-        #     ATC[js][t][2] <= ex_cm[js,t] <= ATC[js][t][1])
+    for js in JS, jn in JN
+        delete(mod, mod.ext[:constraints][:cap_limit][js,jn])
     end
+    mod.ext[:constraints][:cap_limit] =
+        @constraint(mod, [js in JS, jn in JN], g_scar[js, jn] <= CapCM_nodal[jn] + s_cm[jn])
+
+    for jz in JZ
+        delete(mod, mod.ext[:constraints][:capacity_allocation][jz])
+    end
+    mod.ext[:constraints][:capacity_allocation] = @constraint(mod, [jz in JZ],
+        sum(CapCM_nodal[jn] for jn in JN if zone_of_idx[jn] == jz) == CapCM_zonal[jz])
+
+    for jn in JN
+        delete(mod, mod.ext[:constraints][:capcm_limit][jn])
+    end
+    mod.ext[:constraints][:capcm_limit] = @constraint(mod, [jn in JN], CapCM_nodal[jn] <= y_bar_nodal[jn])
+
+
 
     optimize!(mod)
 

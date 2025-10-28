@@ -39,7 +39,7 @@ function build_generator_agent!(mod::Model, m::String, zones::Vector{String})
         + sum(W[jh] * B*g[jh] for jh in JH)
         - sum(W[jh] * λ_EOM[jh]*g[jh] for jh in JH)                                         # weighted revenue from EOM
         + I * y                                                                             # annualized investment cost
-        - σ_CM * sum(λ_CM[home_zone] * cap_cm[jz] for jz in JZ)                             # capacity market revenue - uniform price auction
+        - σ_CM * sum(λ_CM[home_zone] * cap_cm[jz] for jz in JZ)                            # capacity market revenue - uniform price auction
         + sum(W[jh] * ρ_EOM/2*(g[jh] - g_bar[jh])^2 for jh in JH)                           # ADMM penalty term for EOM clearing with weights
         + σ_CM * ρ_CM[home_zone]/2 * (sum(cap_cm[jz] for jz in JZ) - cap_bar[home_zone])^2  # ADMM penalty term for CM
     )
@@ -49,7 +49,7 @@ function build_generator_agent!(mod::Model, m::String, zones::Vector{String})
         y_init * node_share[jn] * AF[jh]
     )
 
-    # Capacity limit constraint
+    # No additional investment in renewables
     mod.ext[:constraints][:cap_limit] = @constraint(mod, [jh=JH], 
         g[jh] <= (y + y_init) * AF[jh])
 

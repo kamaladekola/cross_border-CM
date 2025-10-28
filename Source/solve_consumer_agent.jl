@@ -11,8 +11,8 @@ function solve_consumer_agent!(mod::Model, m::String, zones::Vector{String})
     ela = mod.ext[:parameters][:ela]                  # fraction of demand that is elastic
     # CD = mod.ext[:parameters][:CD]                    # Capacity demand (administratively set?)
     # D_max = mod.ext[:parameters][:D_max]            # maximum demand (can be used in place of CD)
-    # WTP_CM = mod.ext[:parameters][:WTP_CM]          # Willingness to pay for capacity in the CM (price target)
-    # CD_margin = mod.ext[:parameters][:CD_margin]    # capacity demand margin
+    WTP_CM = mod.ext[:parameters][:WTP_CM]          # Willingness to pay for capacity in the CM (price target)
+    CD_margin = mod.ext[:parameters][:CD_margin]    # capacity demand margin
     σ_CM = mod.ext[:parameters][:σ_CM]                # 1 if capacity markets are active, 0 otherwise
     PM = mod.ext[:parameters][:participation_matrix]
 
@@ -28,7 +28,8 @@ function solve_consumer_agent!(mod::Model, m::String, zones::Vector{String})
     # Create variables
     g = mod.ext[:variables][:g]
     g_ela = mod.ext[:variables][:g_ela]
-    cap_cm = mod.ext[:variables][:cap_cm]                                                                              # negative capacity offered in capacity markets
+    cap_cm = mod.ext[:variables][:cap_cm]
+    ens = mod.ext[:variables][:ens]                                                                              # negative capacity offered in capacity markets
 
     # Create affine expressions
     g_positive = mod.ext[:expressions][:g_positive] = @expression(mod, [jh=JH], -g[jh])  # consumption as positive value
@@ -36,6 +37,7 @@ function solve_consumer_agent!(mod::Model, m::String, zones::Vector{String})
     neg_utility = mod.ext[:expressions][:utility] = @expression(mod,                                                                                           
     sum(W[jh] * ((λ_EOM[jh] - WTP)*g_positive[jh] + (WTP/(2*ela*D[jh]))*(g_ela[jh])^2) for jh in JH)
     + σ_CM * sum(λ_CM[jz] * cap_cm[jz] * PM[m][zones[jz]] for jz in JZ)
+    + σ_CM * sum((λ_CM[jz] - WTP_CM) * cap_cm[jz] for jz in JZ)
     )
 
     # Objective => minimize negative utility (maximize utility)

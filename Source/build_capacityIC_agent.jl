@@ -56,24 +56,22 @@ function build_capacityIC_agent!(mod::Model)
     # -------------------
     # Constraints
     # -------------------
+    # g_scar ≤ CapCM_nodal + s_res
+    mod.ext[:constraints][:cap_limit] =
+        @constraint(mod, [js in JS, jn in JN], g_scar[js, jn] <= CapCM_nodal[jn] + s_cm[jn])
+
+    # CapCM_nodal <= y_bar_nodal
+    mod.ext[:constraints][:capcm_limit] = @constraint(mod, [jn in JN], CapCM_nodal[jn] <= y_bar_nodal[jn])
+
+    # zonal capacity allocation to nodes
+    mod.ext[:constraints][:capacity_allocation] = @constraint(mod, [jz in JZ],
+        sum(CapCM_nodal[jn] for jn in JN if zone_of_idx[jn] == jz) == CapCM_zonal[jz])
 
     if coupling == "FB"
 
         # nodal balance constraint: for all scenarios, nodal injection = generation - demand
         mod.ext[:constraints][:nodal_balance] = @constraint(mod, [js in JS, jn in JN], 
             r_cm[js, jn] == g_scar[js, jn] - demand[js,jn])
-
-        # g_scar ≤ CapCM_nodal + s_res
-        mod.ext[:constraints][:cap_limit] =
-            @constraint(mod, [js in JS, jn in JN], g_scar[js, jn] <= y_bar_nodal[jn] + s_cm[jn])
-
-        # CapCM_nodal <= y_bar_nodal
-        mod.ext[:constraints][:capcm_limit] = @constraint(mod, [jn in JN], CapCM_nodal[jn] <= y_bar_nodal[jn])
-
-        # zonal capacity allocation to nodes
-        mod.ext[:constraints][:capacity_allocation] = @constraint(mod, [jz in JZ],
-            sum(CapCM_nodal[jn] for jn in JN if zone_of_idx[jn] == jz) == CapCM_zonal[jz])
-
 
         # Zonal net positions from nodal injections (import-positive)
         #    cap_cm[z] >= - Σ_{n∈z} r_cm[js,n]  for ALL scenarios js  (robust deliverability)
@@ -105,7 +103,7 @@ function build_capacityIC_agent!(mod::Model)
         ex_cm = mod.ext[:variables][:ex_cm] = @variable(mod, [t in TCONNECT], base_name="ex_cm")
         
 
-        mod.ext[:constraints][:cap_limit] = @constraint(mod, [js in JS, jz in JZ], sum(g_scar[js, jn]  for jn in JN if zone_of_idx[jn] == jz) <= CapCM_zonal[jz] + sum(s_cm[jn] for jn in JN if zone_of_idx[jn] == jz))
+        # mod.ext[:constraints][:cap_limit] = @constraint(mod, [js in JS, jz in JZ], sum(g_scar[js, jn]  for jn in JN if zone_of_idx[jn] == jz) <= CapCM_zonal[jz] + sum(s_cm[jn] for jn in JN if zone_of_idx[jn] == jz))
 
         mod.ext[:constraints][:global_bal] = @constraint(mod, sum(cap_cm[jz] for jz in JZ) == 0)
 

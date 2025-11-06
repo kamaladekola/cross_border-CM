@@ -8,7 +8,7 @@ General:
 ADMM:
   rho_EOM: 1 # rho ADMM penalty term, EOM
   rho_CM: 1 # rho ADMM penalty term, CM
-  max_iter: 10000
+  max_iter: 20000
   epsilon: 0.1 # 0.1 # stopping criterion - tolerance on "accuracy" with which the coupling constraints are satisfied. Applied to dual and primal residuals.
   CircularBufferSize: 5 # number of iterations for which data will be retained, should be at least 2 and less than max_iter
 
@@ -23,8 +23,8 @@ Consumers: # consumers by zones
     ela: 0.04 # fraction of demand that is elastic # 0.04 at WTP = 4000, 0.2 at WTP = 20000
     sigmaCM: 1 
     NodeShare:
-        n1: 0.7
-        n2: 0.3
+      n1: 0.7
+      n2: 0.3
 
   B:
     WTP: 4000 #20000.0 # Max clearing price (€/MWh)
@@ -46,40 +46,40 @@ Generators:
   # OPEX are parametrized as a/2 x g^2 + b x g
   A: 
     Baseload:
-      a: 0.0008 # (€/MWh)^2
-      b: 28 # €/MWh
+      a: 0.001 # (€/MWh)^2
+      b: 22 # €/MWh
       C: 0 # MW - existing capacity (set to zero if greenfield)
-      I: 190000 # €/MW-year - annualized investment cost (convert to €/MW-year?)
+      I: 170000 # €/MW-year - annualized investment cost
       max_cap: 100000 # MW - maximum capacity
       sigmaCM: 1
       DF: 1.0 # derating factor
       NodeShare:
-          n1: 0.5
-          n2: 0.5
+          n1: 0.7
+          n2: 0.3
 
     MidMerit:
-      a: 0.0032 # (€/MWh)^2
-      b: 51 # €/MWh
+      a: 0.01 # (€/MWh)^2
+      b: 55 # €/MWh
       C: 0 # MW - existing capacity (set to zero if greenfield)
-      I: 110000 # €/MW-year - annualized investment cost
+      I: 90000 # €/MW-year - annualized investment cost
       max_cap: 100000 # MW - maximum capacity
       sigmaCM: 1
       DF: 1.0 # derating factor
       NodeShare:
-          n1: 0.5
-          n2: 0.5
+          n1: 0.7
+          n2: 0.3
 
     Peak:
-      a: 0.008 # (€/MWh)^2
-      b: 74 # €/MWh
+      a: 0.08 # (€/MWh)^2
+      b: 78 # €/MWh
       C: 0 # MW - existing capacity (set to zero if greenfield)
-      I: 80000 # €/MW-year - annualized investment cost
+      I: 60000 # €/MW-year - annualized investment cost
       max_cap: 100000 # MW - maximum capacity
       sigmaCM: 1
       DF: 1.0 # derating factor
       NodeShare:
-          n1: 0.5
-          n2: 0.5
+          n1: 0.7
+          n2: 0.3
 
     WindOnshore:
       a: 0 # (€/MWh)^2
@@ -91,8 +91,8 @@ Generators:
       sigmaCM: 0
       DF: 0 # derating factor
       NodeShare:
-          n1: 0.5
-          n2: 0.5
+          n1: 0.7
+          n2: 0.3
     PV:
       a: 0 # (€/MWh)^2
       b: 0 # €/MWh
@@ -103,12 +103,12 @@ Generators:
       sigmaCM: 0
       DF: 0 # derating factor
       NodeShare:
-          n1: 0.5
-          n2: 0.5
+          n1: 0.7
+          n2: 0.3
   B:
     Baseload:
-      a: 0.008 # (€/MWh)^2
-      b: 30 # €/MWh
+      a: 0.001 # (€/MWh)^2
+      b: 20 # €/MWh
       C: 0 # MW - existing capacity (set to zero if greenfield)
       I: 180000 # €/MW-year - annualized investment cost (convert to €/MW-year?)
       max_cap: 100000 # MW - maximum capacity
@@ -118,7 +118,7 @@ Generators:
           n3: 1.0
 
     MidMerit:
-      a: 0.032 # (€/MWh)^2
+      a: 0.01 # (€/MWh)^2
       b: 53 # €/MWh
       C: 0 # MW - existing capacity (set to zero if greenfield)
       I: 100000 # €/MW-year - annualized investment cost
@@ -165,10 +165,10 @@ Generators:
 
   C: 
     Baseload:
-      a: 0.008 # (€/MWh)^2
-      b: 32 # €/MWh
+      a: 0.001 # (€/MWh)^2
+      b: 18 # €/MWh
       C: 0 # MW - existing capacity (set to zero if greenfield)
-      I: 170000 # €/MW-year - annualized investment cost (convert to €/MW-year?)
+      I: 190000 # €/MW-year - annualized investment cost (convert to €/MW-year?)
       max_cap: 100000 # MW - maximum capacity
       sigmaCM: 1
       DF: 1.0 # derating factor
@@ -176,10 +176,10 @@ Generators:
           n4: 1.0
 
     MidMerit:
-      a: 0.032 # (€/MWh)^2
-      b: 55 # €/MWh
+      a: 0.01 # (€/MWh)^2
+      b: 51 # €/MWh
       C: 0 # MW - existing capacity (set to zero if greenfield)
-      I: 90000 # €/MW-year - annualized investment cost
+      I: 110000 # €/MW-year - annualized investment cost
       max_cap: 100000 # MW - maximum capacity
       sigmaCM: 1
       DF: 1.0 # derating factor
@@ -188,9 +188,9 @@ Generators:
 
     Peak:
       a: 0.08 # (€/MWh)^2
-      b: 78 # €/MWh
+      b: 74 # €/MWh
       C: 0 # MW - existing capacity (set to zero if greenfield)
-      I: 60000 # €/MW-year - annualized investment cost
+      I: 80000 # €/MW-year - annualized investment cost
       max_cap: 100000 # MW - maximum capacity
       sigmaCM: 1
       DF: 1.0 # derating factor
@@ -223,23 +223,22 @@ Generators:
 
 CM:
   A:
-
-    capacity_target: 55397.05 # MW (capacity target for zone A)
-    price_target: 1000000.0    # €/MW (price target for zone A)
+    capacity_target: 71032.15 #71032.15 #65032.15 MW (explicit/implicit capacity target for zone A)
+    price_target: 60000.0    # €/MW (price target for zone A - CONE)
     capacity_margin: 0.1     # 0% capacity margin
     min_price: -10000000
     max_price: 10000000
     D: "A" #
   B:
-    capacity_target: 17285.76  # MW (capacity target for zone B)
-    price_target: 1000000.0
+    capacity_target: 14505.14 #14505.14 #13873.15  # MW (capacity target for zone B)
+    price_target: 70000.0
     capacity_margin: 0.1
     min_price: -10000000
     max_price: 10000000
     D: "B"
   C:
-    capacity_target: 15712.57  # MW (capacity target for zone C)
-    price_target: 1000000.0
+    capacity_target: 17853.55 #17853.55 #14673.80 MW (capacity target for zone C)
+    price_target: 80000.0
     capacity_margin: 0.1
     min_price: -10000000
     max_price: 10000000
@@ -258,11 +257,13 @@ Network:
 
   ATC:
     A:
-      C: [2680.2, -2680.2]  # [forward limit, backward limit]
+      C: [989.9, -504.5]  # [forward limit, backward limit]
     C:
-      B: [2058.0, -2058.0]
+      B: [1456.7, -399.0]
     B: 
-      A: [1377.8, -1377.8]
+      A: [650.0, -152.6]
+
+# ATC: [(3000.0000000000036, -3000.0), (655.7499999999674, -655.75), (1282.9500000000007, -344.2500000000018)]
 
   reserve_cost: 1000000 # €/MW-year
     
@@ -277,3 +278,4 @@ Network:
   # MC_reserve: 50000 # €/MWh higher than voll
 
 
+# same variable cost for all generators.

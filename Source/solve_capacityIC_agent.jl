@@ -41,8 +41,7 @@ function solve_capacityIC_agent!(mod::Model)
         + sum(rc * s_cm[jn] for jn in JN)
         )
 
-    # constrain cap_cm to zero
-    # @constraint(mod, [jz in JZ], cap_cm[jz] == 0)
+    # mod.ext[:objective] = @objective(mod, Min,0.0)
 
     for js in JS, jn in JN
         delete(mod, mod.ext[:constraints][:cap_limit][js,jn])

@@ -316,7 +316,7 @@ function build_planner_cm(; data, load, pv, wind_on, nodal_ptdf_df, lines, weigh
         if e == 0.0 || D_zonal[t, z] == 0.0
             return -w * d_inel[t, z]
         else
-            return -w * (d_inel[t, z] + d_ela[t, z]) + (w / (2 * e * D_zonal[t, z])) * d_ela[t, z]^2
+            return -w * (d_inel[t, z] + d_ela[t, z]) + (w / (2 * e * D_zonal[t, z])) * d_ela[t, z]^2 # + (w * 1000 * ens[t, z])
         end
     end
 
@@ -726,53 +726,53 @@ cp_cm = solve_and_save(
 )
 @show objective_value(cp_cm[:model])
 
-# # Get y_node (existing capacity parameter)
-# model = cp_cm[:model]
-# params = model.ext[:params]
-# sets = model.ext[:sets]
-# maps = model.ext[:maps]
-# y_node = params.y_node  # This is the existing capacity matrix (I×N)
+# Get y_node (existing capacity parameter)
+model = cp_cm[:model]
+params = model.ext[:params]
+sets = model.ext[:sets]
+maps = model.ext[:maps]
+y_node = params.y_node  # This is the existing capacity matrix (I×N)
 
-# # Get y_bar (new capacity allocation variable)
-# vars = model.ext[:vars]
-# y_bar_var = vars[:y_bar]
-# y_bar_values = value.(y_bar_var)  # This is the optimal new capacity allocation (I×N)
+# Get y_bar (new capacity allocation variable)
+vars = model.ext[:vars]
+y_bar_var = vars[:y_bar]
+y_bar_values = value.(y_bar_var)  # This is the optimal new capacity allocation (I×N)
 
-# # Create DataFrame for existing capacity
-# sets = cp_cm[:model].ext[:sets]
-# techs = sets.techs
-# nodes = sets.nodes
+# Create DataFrame for existing capacity
+sets = cp_cm[:model].ext[:sets]
+techs = sets.techs
+nodes = sets.nodes
 
-# existing_capacity_df = DataFrame(
-#     Technology = repeat(String.(techs), sets.N),
-#     Node = repeat(String.(nodes), inner = sets.I),
-#     ExistingCapacity = vec(y_node)
-# )
+existing_capacity_df = DataFrame(
+    Technology = repeat(String.(techs), sets.N),
+    Node = repeat(String.(nodes), inner = sets.I),
+    ExistingCapacity = vec(y_node)
+)
 
-# # Create DataFrame for new capacity allocation
-# new_capacity_df = DataFrame(
-#     Technology = repeat(String.(techs), sets.N),
-#     Node = repeat(String.(nodes), inner = sets.I),
-#     NewCapacity = vec(y_bar_values)
-# )
+# Create DataFrame for new capacity allocation
+new_capacity_df = DataFrame(
+    Technology = repeat(String.(techs), sets.N),
+    Node = repeat(String.(nodes), inner = sets.I),
+    NewCapacity = vec(y_bar_values)
+)
 
-# # Add y_node to y_bar to get total capacity per (i,n)
-# total_capacity_df = copy(existing_capacity_df)
-# total_capacity_df[!, :TotalCapacity] = existing_capacity_df[!, :ExistingCapacity] .+ new_capacity_df[!, :NewCapacity]
+# Add y_node to y_bar to get total capacity per (i,n)
+total_capacity_df = copy(existing_capacity_df)
+total_capacity_df[!, :TotalCapacity] = existing_capacity_df[!, :ExistingCapacity] .+ new_capacity_df[!, :NewCapacity]
 
-# # Calculate total capacity per node (summing across all technologies)
-# node_summary_df = combine(
-#     groupby(total_capacity_df, :Node),
-#     :ExistingCapacity => sum => :ExistingCapacity,
-#     :TotalCapacity => sum => :TotalCapacity
-# )
+# Calculate total capacity per node (summing across all technologies)
+node_summary_df = combine(
+    groupby(total_capacity_df, :Node),
+    :ExistingCapacity => sum => :ExistingCapacity,
+    :TotalCapacity => sum => :TotalCapacity
+)
 
-# # Calculate new capacity per node
-# node_summary_df[!, :NewCapacity] = node_summary_df[!, :TotalCapacity] .- node_summary_df[!, :ExistingCapacity]
+# Calculate new capacity per node
+node_summary_df[!, :NewCapacity] = node_summary_df[!, :TotalCapacity] .- node_summary_df[!, :ExistingCapacity]
 
-# # Print results
-# # println("Total capacity by technology and node:")
-# # println(total_capacity_df)
-# println("\nTotal capacity by node:")
-# println(node_summary_df)
+# Print results
+# println("Total capacity by technology and node:")
+# println(total_capacity_df)
+println("\nTotal capacity by node:")
+println(node_summary_df)
 

@@ -49,7 +49,7 @@ function build_generator_agent!(mod::Model, m::String, zones::Vector{String})
         y_init * node_share[jn] * AF[jh]
     )
 
-    # No additional investment in renewables
+    # generation ≤ available capacity
     mod.ext[:constraints][:cap_limit] = @constraint(mod, [jh=JH], 
         g[jh] <= (y + y_init) * AF[jh])
 

@@ -1,5 +1,5 @@
 ;A;B;C
-simultaneous_scarcity;0.9;0.9;0.9
-scarcity_A;1;0.9;0.9
-scarcity_B;0.9;1;0.9
-scarcity_C;0.9;0.9;1
+simultaneous_scarcity;0.855;0.855;0.855
+scarcity_A;0.9;0.81;0.81
+scarcity_B;0.81;0.9;0.81
+scarcity_C;0.81;0.81;0.9

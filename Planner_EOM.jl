@@ -534,17 +534,15 @@ cp_eom = solve_and_save(inputs.data, inputs.load, inputs.pv, inputs.wind_on, inp
 # print(cp_eom)
 
 
-# JH = cp_eom[:model].ext[:sets].JH
-# JZ = cp_eom[:model].ext[:sets].JZ
-# JN = cp_eom[:model].ext[:sets].JN
-# zone_of_node = cp_eom[:model].ext[:maps].zone_of_node
-# nbal_dual = cp_eom[:nbal_dual]  
-# rho = cp_eom[:rho]          
-# y_nodal = cp_eom[:model].ext[:vars][:y_bar]
-# y_zonal = cp_eom[:model].ext[:vars][:y]
+JH = cp_eom[:model].ext[:sets].JH
+JZ = cp_eom[:model].ext[:sets].JZ
+JN = cp_eom[:model].ext[:sets].JN
+zone_of_node = cp_eom[:model].ext[:maps].zone_of_node
+nbal_dual = cp_eom[:nbal_dual]  
+rho = cp_eom[:rho]          
+y_nodal = cp_eom[:model].ext[:vars][:y_bar]
 
-# println(value.(y_nodal))
-# println(value.(y_zonal))
+println(value.(y_nodal))
 
 
 # for t in JH

@@ -52,8 +52,8 @@ function ADMM!(results::Dict,ADMM::Dict,EOM::Dict,CM::Dict,mdict::Dict,agents::D
             # Update prices for each zone #  ρ damper - 20 EOM; 50 CM; 
             @timeit TO "Update prices" begin
                 for z in zones
-                    push!(results["λ"]["EOM"][z], results["λ"]["EOM"][z][end] - ADMM["ρ"]["EOM"][z][end]/5*ADMM["Imbalances"]["EOM"][z][end])
-                    push!(results["λ"]["CM"][z], results["λ"]["CM"][z][end] - ADMM["ρ"]["CM"][z][end]/10*ADMM["Imbalances"]["CM"][z][end])
+                    push!(results["λ"]["EOM"][z], results["λ"]["EOM"][z][end] - ADMM["ρ"]["EOM"][z][end]/3*ADMM["Imbalances"]["EOM"][z][end])
+                    push!(results["λ"]["CM"][z], results["λ"]["CM"][z][end] - ADMM["ρ"]["CM"][z][end]/5*ADMM["Imbalances"]["CM"][z][end])
                     # limit price update to investment cost of most expensive plant and no negative prices
                     # λ_CM_new = results["λ"]["CM"][z][end] - ADMM["ρ"]["CM"][z][end]/20*ADMM["Imbalances"]["CM"][z][end]
                     # λ_CM_new = max(λ_CM_new, data["CM"][z]["min_price"])

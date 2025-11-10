@@ -306,7 +306,7 @@ function build_planner_cm(; data, load, pv, wind_on, nodal_ptdf_df, lines, weigh
     @variable(model, r_cm[JS, JN])                  # nodal net position in CM scenarios
     @variable(model, f_cm[JS, JL])                  # line flows in CM scenarios
     @variable(model, p_cm[JZ])                      # zonal capacity net positions
-    @variable(model, CD[JZ] >= 0)                # capacity demand in CM per zone
+    @variable(model, CD[JZ] >= 0)                   # capacity demand in CM per zone
 
 
     # negative utility function per zone
@@ -316,7 +316,7 @@ function build_planner_cm(; data, load, pv, wind_on, nodal_ptdf_df, lines, weigh
         if e == 0.0 || D_zonal[t, z] == 0.0
             return -w * d_inel[t, z]
         else
-            return -w * (d_inel[t, z] + d_ela[t, z]) + (w / (2 * e * D_zonal[t, z])) * d_ela[t, z]^2 # + (w * 1000 * ens[t, z])
+            return -w * (d_inel[t, z] + d_ela[t, z]) + (w / (2 * e * D_zonal[t, z])) * d_ela[t, z]^2
         end
     end
 
@@ -375,8 +375,7 @@ function build_planner_cm(; data, load, pv, wind_on, nodal_ptdf_df, lines, weigh
     # zonal capacity limits
     zonal_cap = @constraint(model, [t in JH, i in JI, z in JZ], g[t, i, z] <= AV[t, i, z] * (y[i, z] + sum(y_node[i, n] for n in JN if zone_of_node[n] == z)))
 
-    cm_demand_lower = @constraint(model, [z in JZ], CD[z] >= CD_ref[z] * (1 - margins[z]))
-    cm_demand_upper = @constraint(model, [z in JZ], CD[z] <= CD_ref[z] * (1 + margins[z]))
+
 
     # initialize
     cm_bal = nothing
@@ -396,8 +395,11 @@ function build_planner_cm(; data, load, pv, wind_on, nodal_ptdf_df, lines, weigh
     ### capacity market constraints (Flow-based)
 
     if data["Network"]["coupling"] == "FB"
-        # # zonal balance in CM -> capacity sold in CM per zone = capacity manager net position in CM + capacity demand in zone
-        cm_bal = @constraint(model, [z in JZ], sum(cap_cm[i, z] for i in JI) - CD[z] + p_cm[z] == 0) # imports positive
+
+        @variable(model, sys_req >= 0) # newly added
+
+        # Zonal balance in CM: capacity offered + imports = capacity demand
+        cm_bal = @constraint(model, [z in JZ],  sum(cap_cm[i, z] for i in JI) + p_cm[z] == CD[z])
 
         # # Capacity limits:
         cm_cap = @constraint(model, [i in JI, n in JN], cap_cm_bar[i, n] <= y_bar[i, n])
@@ -405,18 +407,24 @@ function build_planner_cm(; data, load, pv, wind_on, nodal_ptdf_df, lines, weigh
         # Link between zonal and nodal capacity in CM -> sum of nodal capacity offer in CM == nodal capacity sold in CM
         cm_alloc = @constraint(model, [i in JI, z in JZ], cap_cm[i, z] == sum(cap_cm_bar[i, n] for n in JN if zone_of_node[n] == z))
 
-
         # nodal capacity generation in CM <= derated capacity offer in CM
         # cm_gen = @constraint(model, [s in JS, i in JI, n in JN], g_cm[s, i, n] <= cap_cm_bar[i, n])
         cm_gen = @constraint(model, [s in JS, i in JI, n in JN], g_cm[s, i, n] <= y_bar[i, n])
 
 
-        nodal_capacity_demand = @expression(model, [n in JN], S[zone_of_node[n], n] * CD[zone_of_node[n]])
+        nodal_capacity_demand = @expression(model, [s in JS, n in JN], S[zone_of_node[n], n] * CD[zone_of_node[n]] * scarcity_matrix[s, zone_of_node[n]])
+        nodal_capacity_demand_ref = @expression(model, [s in JS, n in JN], S[zone_of_node[n], n] * CD_ref[zone_of_node[n]] * scarcity_matrix[s, zone_of_node[n]])
             
-        scarcity_demand = @expression(model, [s in JS, n in JN], scarcity_matrix[s, zone_of_node[n]] * nodal_capacity_demand[n])
+        zonal_req = @expression(model, [s in JS, z in JZ], sum(nodal_capacity_demand_ref[s, n] for n in JN if zone_of_node[n] == z))
+        
+        # System requirement equals total CD across zones
+        cm_demand = @constraint(model, sum(CD[z] for z in JZ) == sys_req)
+        
+        # System requirement must be sufficient for each scenario
+        cm_adequacy = @constraint(model, [s in JS], sys_req >= sum(zonal_req[s, z] for z in JZ))
 
         # nodal balance
-        cm_nbal = @constraint(model, [s in JS, n in JN], r_cm[s, n] == sum(g_cm[s, i, n] for i in JI) - scarcity_demand[s, n])
+        cm_nbal = @constraint(model, [s in JS, n in JN], r_cm[s, n] == sum(g_cm[s, i, n] for i in JI) - nodal_capacity_demand[s, n])
 
         # capacity net position in CM = sum of nodal capacity net positions in CM
         cm_agg = @constraint(model, [s in JS, z in JZ], p_cm[z] >= - sum(r_cm[s, n] for n in JN if zone_of_node[n] == z))
@@ -485,6 +493,9 @@ function build_planner_cm(; data, load, pv, wind_on, nodal_ptdf_df, lines, weigh
         cm_atc_limit = @constraint(model, [t in TCONNECT], 
             ATC[t][2] <= ex_cm[t] <= ATC[t][1]
         )
+
+        cm_demand_lower = @constraint(model, [z in JZ], CD[z] >= CD_ref[z])
+        cm_demand_upper = @constraint(model, [z in JZ], CD[z] <= CD_ref[z] * (1 + margins[z]))
         
     else
         # constrain capacity trade to zero
@@ -495,6 +506,8 @@ function build_planner_cm(; data, load, pv, wind_on, nodal_ptdf_df, lines, weigh
         # cap_cm must be less than installed capacity in the zone
         cm_cap = @constraint(model, [i in JI, z in JZ], cap_cm[i, z] <= sum(y_bar[i, n] for n in JN if zone_of_node[n] == z))
 
+        cm_demand_lower = @constraint(model, [z in JZ], CD[z] >= CD_ref[z])
+        cm_demand_upper = @constraint(model, [z in JZ], CD[z] <= CD_ref[z] * (1 + margins[z]))
     end
 
 
@@ -517,7 +530,7 @@ function build_planner_cm(; data, load, pv, wind_on, nodal_ptdf_df, lines, weigh
             :cm_cap => cm_cap, :cm_alloc => cm_alloc,
             :cm_gen => cm_gen, :cm_nbal => cm_nbal, :cm_agg => cm_agg,
             :cm_fmap => cm_fmap, :cm_therm => cm_therm, 
-            :cm_sbal => cm_sbal, :cm_gbal => cm_gbal
+            :cm_sbal => cm_sbal, :cm_gbal => cm_gbal,
         ),
         :scalars => Dict(:ela => ela, :WTP => WTP),
         :expressions => Dict(:ens => ens, :gen_cost => gen_cost, 
@@ -775,4 +788,3 @@ node_summary_df[!, :NewCapacity] = node_summary_df[!, :TotalCapacity] .- node_su
 # println(total_capacity_df)
 println("\nTotal capacity by node:")
 println(node_summary_df)
-

@@ -8,7 +8,7 @@ General:
 ADMM:
   rho_EOM: 1 # rho ADMM penalty term, EOM
   rho_CM: 1 # rho ADMM penalty term, CM
-  max_iter: 20000
+  max_iter: 10000
   epsilon: 0.1 # 0.1 # stopping criterion - tolerance on "accuracy" with which the coupling constraints are satisfied. Applied to dual and primal residuals.
   CircularBufferSize: 5 # number of iterations for which data will be retained, should be at least 2 and less than max_iter
 
@@ -18,26 +18,26 @@ EOM:
 
 Consumers: # consumers by zones
   A:
-    WTP: 4000 # Max clearing price (€/MWh)
+    WTP: 20000 # Max clearing price (€/MWh)
     D: "A" # Demand timeseries that needs to be picked up
-    ela: 0.04 # fraction of demand that is elastic # 0.04 at WTP = 4000, 0.2 at WTP = 20000
+    ela: 0.2 # fraction of demand that is elastic # 0.04 at WTP = 4000, 0.2 at WTP = 20000
     sigmaCM: 1 
     NodeShare:
       n1: 0.7
       n2: 0.3
 
   B:
-    WTP: 4000 #20000.0 # Max clearing price (€/MWh)
+    WTP: 20000 #20000.0 # Max clearing price (€/MWh)
     D: "B" # Timeseries that needs to be picked up
-    ela: 0.04 # fraction of demand that is elastic
+    ela: 0.2 # fraction of demand that is elastic
     sigmaCM: 1
     NodeShare:
         n3: 1.0
 
   C:
-    WTP: 4000 #20000.0 # Max clearing price (€/MWh)
+    WTP: 20000 #20000.0 # Max clearing price (€/MWh)
     D: "C" # Timeseries that needs to be picked up
-    ela: 0.04 # fraction of demand that is elastic
+    ela: 0.2 # fraction of demand that is elastic
     sigmaCM: 1
     NodeShare:
         n4: 1.0
@@ -47,9 +47,9 @@ Generators:
   A: 
     Baseload:
       a: 0.001 # (€/MWh)^2
-      b: 22 # €/MWh
+      b: 18 # €/MWh
       C: 0 # MW - existing capacity (set to zero if greenfield)
-      I: 170000 # €/MW-year - annualized investment cost
+      I: 180000 # €/MW-year - annualized investment cost
       max_cap: 100000 # MW - maximum capacity
       sigmaCM: 1
       DF: 1.0 # derating factor
@@ -59,9 +59,9 @@ Generators:
 
     MidMerit:
       a: 0.01 # (€/MWh)^2
-      b: 55 # €/MWh
+      b: 51 # €/MWh
       C: 0 # MW - existing capacity (set to zero if greenfield)
-      I: 90000 # €/MW-year - annualized investment cost
+      I: 100000 # €/MW-year - annualized investment cost
       max_cap: 100000 # MW - maximum capacity
       sigmaCM: 1
       DF: 1.0 # derating factor
@@ -73,7 +73,7 @@ Generators:
       a: 0.08 # (€/MWh)^2
       b: 78 # €/MWh
       C: 0 # MW - existing capacity (set to zero if greenfield)
-      I: 60000 # €/MW-year - annualized investment cost
+      I: 70000 # €/MW-year - annualized investment cost
       max_cap: 100000 # MW - maximum capacity
       sigmaCM: 1
       DF: 1.0 # derating factor
@@ -108,9 +108,9 @@ Generators:
   B:
     Baseload:
       a: 0.001 # (€/MWh)^2
-      b: 20 # €/MWh
+      b: 18 # €/MWh
       C: 0 # MW - existing capacity (set to zero if greenfield)
-      I: 180000 # €/MW-year - annualized investment cost (convert to €/MW-year?)
+      I: 185000 # €/MW-year - annualized investment cost (convert to €/MW-year?)
       max_cap: 100000 # MW - maximum capacity
       sigmaCM: 1
       DF: 1.0 # derating factor
@@ -119,9 +119,9 @@ Generators:
 
     MidMerit:
       a: 0.01 # (€/MWh)^2
-      b: 53 # €/MWh
+      b: 51 # €/MWh
       C: 0 # MW - existing capacity (set to zero if greenfield)
-      I: 100000 # €/MW-year - annualized investment cost
+      I: 105000 # €/MW-year - annualized investment cost
       max_cap: 100000 # MW - maximum capacity
       sigmaCM: 1
       DF: 1.0 # derating factor
@@ -130,9 +130,9 @@ Generators:
 
     Peak:
       a: 0.08 # (€/MWh)^2
-      b: 76 # €/MWh
+      b: 78 # €/MWh
       C: 0 # MW - existing capacity (set to zero if greenfield)
-      I: 70000 # €/MW-year - annualized investment cost
+      I: 75000 # €/MW-year - annualized investment cost
       max_cap: 100000 # MW - maximum capacity
       sigmaCM: 1
       DF: 1.0 # derating factor
@@ -188,7 +188,7 @@ Generators:
 
     Peak:
       a: 0.08 # (€/MWh)^2
-      b: 74 # €/MWh
+      b: 78 # €/MWh
       C: 0 # MW - existing capacity (set to zero if greenfield)
       I: 80000 # €/MW-year - annualized investment cost
       max_cap: 100000 # MW - maximum capacity
@@ -223,23 +223,24 @@ Generators:
 
 CM:
   A:
-    capacity_target: 71032.15 #71032.15 #65032.15 MW (explicit/implicit capacity target for zone A)
-    price_target: 60000.0    # €/MW (price target for zone A - CONE)
-    capacity_margin: 0.1     # 0% capacity margin
+    # explicit/implicit/capacity target for zone A
+    capacity_target: 65032.15 # "FB"  - 70327.55 / "ATC" / "noCBP" - 71032.15 / "implicit" - 65032.15
+    price_target: 80000    # €/MW (price target for zone A - CONE)
+    capacity_margin: 0.05     # 5% capacity margin
     min_price: -10000000
     max_price: 10000000
     D: "A" #
   B:
-    capacity_target: 14505.14 #14505.14 #13873.15  # MW (capacity target for zone B)
-    price_target: 70000.0
-    capacity_margin: 0.1
+    capacity_target: 13873.15 # "FB" - 13952.64 / "ATC" / "noCBP" - 14505.14 / "implicit" - 13873.15
+    price_target: 75000
+    capacity_margin: 0.05
     min_price: -10000000
     max_price: 10000000
     D: "B"
   C:
-    capacity_target: 17853.55 #17853.55 #14673.80 MW (capacity target for zone C)
-    price_target: 80000.0
-    capacity_margin: 0.1
+    capacity_target: 14673.80 # "FB" - 15874.78 / "ATC" / "noCBP" - 17853.55 / "implicit" - 14673.80
+    price_target: 70000
+    capacity_margin: 0.05
     min_price: -10000000
     max_price: 10000000
     D: "C"
@@ -257,15 +258,15 @@ Network:
 
   ATC:
     A:
-      C: [989.9, -504.5]  # [forward limit, backward limit]
+      C: [1110.6, -1110.6]  # [forward limit, backward limit]
     C:
-      B: [1456.7, -399.0]
+      B: [257.3, -257.3]
     B: 
-      A: [650.0, -152.6]
+      A: [650.0, -1105.9]
 
 # ATC: [(3000.0000000000036, -3000.0), (655.7499999999674, -655.75), (1282.9500000000007, -344.2500000000018)]
 
-  reserve_cost: 1000000 # €/MW-year
+  reserve_cost: 10000000 # €/MW-year
     
 
   nLines: 4
@@ -273,7 +274,7 @@ Network:
   lines: "lines"  # lines dataframe
   ptdf: "ATC"  # PTDF dataframe
   nodal_ptdf: "nodal_ptdf"  # nodal PTDF dataframe
-  coupling: "FB"  # "FB" / "ATC" / "noCBP" / "implicit" / "none"
+  coupling: "implicit"  # "FB" / "ATC" / "noCBP" / "implicit" / "none"
   # IC_reserve: 500000 # €/MW-year higher than the highest fixed cost
   # MC_reserve: 50000 # €/MWh higher than voll
 

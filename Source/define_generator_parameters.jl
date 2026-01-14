@@ -1,9 +1,10 @@
-function define_generator_parameters!(mod::Model, data::Dict,ts::DataFrame, af::DataFrame)
+function define_generator_parameters!(mod::Model, data::Dict, weights::DataFrame, af::DataFrame, zone::SubString{String})
     # Parameters 
     mod.ext[:parameters][:A] = data["a"]
     mod.ext[:parameters][:B] = data["b"]
     mod.ext[:parameters][:C] = data["C"]
 
+    mod.ext[:parameters][:w] = weights[!, Symbol(zone)][1:data["nTimesteps"]]
     # investment parameters
     mod.ext[:parameters][:I] = data["I"]
     mod.ext[:parameters][:max_cap]  = data["max_cap"]

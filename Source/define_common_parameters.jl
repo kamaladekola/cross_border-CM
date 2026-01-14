@@ -1,4 +1,4 @@
-function define_common_parameters!(m::String,mod::Model, data::Dict, ts::DataFrame, agents::Dict, scenario_overview_row::DataFrameRow, zones::Vector{String}, ptdf::DataFrame, nodal_ptdf::DataFrame, lines::DataFrame, participation_matrix::DataFrame, derating_factor::DataFrame)
+function define_common_parameters!(m::String, mod::Model, data::Dict, agents::Dict, scenario_overview_row::DataFrameRow, zones::Vector{String}, ptdf::DataFrame, nodal_ptdf::DataFrame, lines::DataFrame, participation_matrix::DataFrame, derating_factor::DataFrame)
 
     # zone, _ = parse_agent_name(m)
 
@@ -37,8 +37,6 @@ function define_common_parameters!(m::String,mod::Model, data::Dict, ts::DataFra
         participation_switch[agent_name] = Dict(z => row[Symbol(z)] for z in zones)
     end
     mod.ext[:parameters][:participation_matrix] = participation_switch
-
-    mod.ext[:parameters][:w] = ts[!, :weights][1:data["General"]["nTimesteps"]]
     
     # Node -> zone mapping
     zone_map = Dict{Symbol,Vector{Symbol}}()

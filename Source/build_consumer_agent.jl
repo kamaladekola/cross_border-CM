@@ -42,7 +42,7 @@ function build_consumer_agent!(mod::Model, m::String, zones::Vector{String})
     neg_utility = mod.ext[:expressions][:utility] = @expression(mod,
     sum(W[jh] * ((λ_EOM[jh] - WTP) * g_positive[jh] + (WTP/(2 * ela * D[jh])) * (g_ela[jh])^2) for jh in JH)                    # Utility function for energy consumption
     + σ_CM * sum((λ_CM[jz]) * cap_cm[jz] for jz in JZ)                                                    # payment for reliability through capacity markets
-    # + sum(ens[jh] * WTP for jh in JH)                                                                 # cost of unserved energy
+    # + σ_CM * sum((λ_CM[jz] - WTP_CM) * cap_cm[jz] for jz in JZ)                                                                 # cost of unserved energy
     )
 
     # Objective => minimize negative utility (maximize utility)
@@ -61,6 +61,7 @@ function build_consumer_agent!(mod::Model, m::String, zones::Vector{String})
 
     for jz in JZ
         if zones[jz] == z
+            # mod.ext[:constraints][Symbol("CD_$jz")] = @constraint(mod, cap_cm[jz] >= 0.0)
             mod.ext[:constraints][Symbol("CD_$jz")] = @constraint(mod, cap_cm[jz] >= σ_CM * PM[m][zones[jz]] * CD)
             mod.ext[:constraints][Symbol("CD_upper_$jz")] = @constraint(mod, cap_cm[jz] <= σ_CM * PM[m][zones[jz]] * (1 + CD_margin) * CD)
         else

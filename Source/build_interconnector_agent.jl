@@ -7,7 +7,7 @@ function build_interconnector_agent!(mod::Model)
     JN = mod.ext[:sets][:JN]           # nodes
 
     # Parameters
-    W = mod.ext[:parameters][:w]                            # hour weights
+    W = mod.ext[:parameters][:weight]                            # hour weights
     nodal_PTDF = mod.ext[:parameters][:nodal_PTDF]          # |L|×|N| nodal PTDF
     λ_all = mod.ext[:parameters][:λ_all]                    # |H|×|Z| EOM prices per zone
 
@@ -33,8 +33,8 @@ function build_interconnector_agent!(mod::Model)
 
     # Objective
     mod.ext[:objective] = @objective(mod, Min, 
-    - sum(W[jh] * λ_all[jh,jz] * g[jh,jz] for jh in JH, jz in JZ)
-    + sum(W[jh] * (ρ_all[jz]/2) * (g[jh,jz] - g_bar_all[jh,jz])^2 for jh in JH, jz in JZ)
+    - sum(W[jh,jz] * λ_all[jh,jz] * g[jh,jz] for jh in JH, jz in JZ)
+    + sum(W[jh,jz] * (ρ_all[jz]/2) * (g[jh,jz] - g_bar_all[jh,jz])^2 for jh in JH, jz in JZ)
     + sum(rc * s[jn] for jn in JN)
     )
 

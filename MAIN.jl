@@ -52,10 +52,10 @@ include(joinpath(home_dir,"Source","save_results.jl"))
 
 # Data common to all scenarios data 
 data = YAML.load_file(joinpath(home_dir,"Input","config.yaml"))
-ts = CSV.read(joinpath(home_dir,"Input","timeseries.csv"),delim=";",DataFrame) # to be removed
+weights = CSV.read(joinpath(home_dir,"Input","weights.csv"),delim=";",DataFrame) # to be removed
 load = CSV.read(joinpath(home_dir,"Input","load.csv"),delim=";",DataFrame) # columns are zones
 pv = CSV.read(joinpath(home_dir,"Input","pv.csv"),delim=";",DataFrame)
-wind_offshore = CSV.read(joinpath(home_dir,"Input","wind_offshore.csv"),delim=";",DataFrame)
+# wind_offshore = CSV.read(joinpath(home_dir,"Input","wind_offshore.csv"),delim=";",DataFrame)
 wind_onshore = CSV.read(joinpath(home_dir,"Input","wind_onshore.csv"),delim=";",DataFrame)
 ptdf = CSV.read(joinpath(home_dir,"Input","ptdf.csv"),delim=";",DataFrame)
 nodal_ptdf = CSV.read(joinpath(home_dir,"Input","nodal_ptdf.csv"),delim=";",DataFrame)
@@ -160,8 +160,8 @@ for m in agents[:Cons]
     zone, _ = parse_agent_name(m)
     cons_data = merge(data["General"], data["Consumers"][zone], data["CM"][zone])
 
-    define_common_parameters!(m, mdict[m], data, ts, agents, scenario_overview_row, zones, ptdf, nodal_ptdf, lines, participation_matrix, derating_factor) # Parameters common to all agents
-    define_consumer_parameters!(mdict[m], cons_data, load)                            # Consumers
+    define_common_parameters!(m, mdict[m], data, agents, scenario_overview_row, zones, ptdf, nodal_ptdf, lines, participation_matrix, derating_factor) # Parameters common to all agents
+    define_consumer_parameters!(mdict[m], cons_data, load, weights)                            # Consumers
 end
 
 # Generator models
@@ -177,20 +177,20 @@ for m in agents[:Gen]
         C = ones(data["General"]["nTimesteps"]))
     end
     gen_data = merge(data["General"], data["Generators"][zone][tech])
-    define_common_parameters!(m, mdict[m], data, ts, agents, scenario_overview_row, zones, ptdf, nodal_ptdf, lines, participation_matrix, derating_factor) # Parameters common to all agents
-    define_generator_parameters!(mdict[m], gen_data, ts, af)                            # Generators
+    define_common_parameters!(m, mdict[m], data, agents, scenario_overview_row, zones, ptdf, nodal_ptdf, lines, participation_matrix, derating_factor) # Parameters common to all agents
+    define_generator_parameters!(mdict[m], gen_data, weights, af, zone)                             # Generators
 end
 
 # Interconnector models
 for m in agents[:IC]
     IC_data = merge(data["General"], data["Network"], data["Consumers"])
-    define_common_parameters!(m, mdict[m], data, ts, agents, scenario_overview_row, zones, ptdf, nodal_ptdf, lines, participation_matrix, derating_factor) # Parameters common to all agents
-    define_interconnector_parameters!(mdict[m], IC_data, zones, ptdf, nodal_ptdf, lines)                # Interconnectors
+    define_common_parameters!(m, mdict[m], data, agents, scenario_overview_row, zones, ptdf, nodal_ptdf, lines, participation_matrix, derating_factor) # Parameters common to all agents
+    define_interconnector_parameters!(mdict[m], IC_data, zones, ptdf, nodal_ptdf, lines, weights)                # Interconnectors
 end
 
 # Capacity manager models
 for m in agents[:CIC]
-    define_common_parameters!(m, mdict[m], data, ts, agents, scenario_overview_row, zones, ptdf, nodal_ptdf, lines, participation_matrix, derating_factor) # Parameters common to all agents
+    define_common_parameters!(m, mdict[m], data, agents, scenario_overview_row, zones, ptdf, nodal_ptdf, lines, participation_matrix, derating_factor) # Parameters common to all agents
     define_capacityIC_parameters!(mdict[m], data, zones, ptdf, scarcity) # Capacity manager
     if data["Network"]["coupling"] == "ATC"
             define_getATC!(mdict[m]) # ATC parameters

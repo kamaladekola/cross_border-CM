@@ -48,7 +48,7 @@ struct Maps
 end
 
 struct Params
-    W::Vector{Float64} # weights per t
+    W::Matrix{Float64} # weights per t × z
     D_zonal::Matrix{Float64} # H × Z (demand)
     AV::Array{Float64,3} # H × I × N (availability factor)
     y_node::Matrix{Float64} # I × N (existing capacity)
@@ -69,16 +69,30 @@ function read_inputs(base_dir::AbstractString)
     nptdf = CSV.read(joinpath(base_dir, "Input", "nodal_ptdf.csv"), DataFrame; delim = ";")
     lines = CSV.read(joinpath(base_dir, "Input", "lines.csv"), DataFrame; delim = ";")
 
-
     H = Int(data["General"]["nTimesteps"])
-    weights = joinpath(base_dir, "Input", "timeseries.csv")
+    zones = collect_zones(data)
+    Z = length(zones)
+    
+    weights = joinpath(base_dir, "Input", "weights.csv")
     W = if isfile(weights)
-    df = CSV.read(weights, DataFrame; delim = ";")
-    :weights ∈ propertynames(df) ? Float64.(df[!, :weights][1:H]) : ones(Float64, H)
+        df = CSV.read(weights, DataFrame; delim = ";")
+        # Read zone-specific columns or use uniform weights
+        W_matrix = zeros(Float64, H, Z)
+        for (zidx, z) in enumerate(zones)
+            col_sym = Symbol(z)  # Changed from Symbol("(z)") to Symbol(z)
+            if col_sym ∈ propertynames(df)
+                W_matrix[:, zidx] = Float64.(df[!, col_sym][1:H])
+            # elseif :weights ∈ propertynames(df)
+            #     # Fallback: use single weights column for all zones
+            #     W_matrix[:, zidx] = Float64.(df[!, :weights][1:H])
+            else
+                error("No weight column found for zone $(z). Expected '$(z)' or 'weights' in weights.csv")
+            end
+        end
+        W_matrix
     else
-    ones(Float64, H)
+        error("weights.csv file not found")  # Also fixed the error message here
     end
-
 
     return (data=data, load=load, pv=pv, wind_on=wind_on,
     nptdf=nptdf, lines=lines, weights=W)
@@ -251,7 +265,7 @@ function define_parameters(data, load, pv, wind_on, nptdf, lines, weights, sets:
     Fmax = Float64.(safe_col(lines, :Fmax))
     @assert size(PTDF,1) == L "PTDF rows must match number of lines"
 
-    return Params(Float64.(weights[1:H]), D_zonal, AV, y_node, MC, max_cap, A, IC, S, PTDF, Fmax), ela, WTP
+    return Params(weights, D_zonal, AV, y_node, MC, max_cap, A, IC, S, PTDF, Fmax), ela, WTP
 end
 
 function build_planner_eom(; data, load, pv, wind_on, nodal_ptdf_df, lines, weights)
@@ -292,14 +306,14 @@ function build_planner_eom(; data, load, pv, wind_on, nodal_ptdf_df, lines, weig
 
     # marginal cost + quadratic cost
     @expression(model, gen_cost,
-        sum(W[t] * MC[i, z] * g[t, i, z] for t in JH, i in JI, z in JZ)
-        + sum(W[t] * A[i, z] / 2 * g[t, i, z]^2 for t in JH, i in JI, z in JZ)
+        sum(W[t,z] * MC[i, z] * g[t, i, z] for t in JH, i in JI, z in JZ)
+        + sum(W[t,z] * A[i, z] / 2 * g[t, i, z]^2 for t in JH, i in JI, z in JZ)
     )
     # investment cost
     @expression(model, inv_cost, sum(IC[i, z] * y[i, z] for i in JI, z in JZ))
 
     # consumer utility
-    @expression(model, neg_utility,  sum(W[t] * consumer_utility(t, z) for t in JH, z in JZ))
+    @expression(model, neg_utility,  sum(W[t,z] * consumer_utility(t, z) for t in JH, z in JZ))
 
     # Objective: minimize (costs - utility)
     @objective(model, Min, (inv_cost + gen_cost + neg_utility))
@@ -431,12 +445,12 @@ function solve_and_save(
 
     # Zonal prices (€/MWh) from balance duals, unweighted
     W = params.W
-    rho = [dual(ext[:constraint][:bal][t, z]) / W[t] for t in JH, z in JZ]
+    rho = [dual(ext[:constraint][:bal][t, z]) / W[t,z] for t in JH, z in JZ]
     nbal_dual = [-dual(ext[:constraint][:nbal][t, n]) for t in JH, n in JN]
 
 
     # extract dual of alloc
-    dual_alloc = [dual(ext[:constraint][:alloc][i, z]) for i in JI, z in JZ] # show the dataframe in the terminal
+    dual_alloc = [dual(ext[:constraint][:alloc][i, z]) for i in JI, z in JZ]
     println(DataFrame(dual_alloc, :auto))
 
     # Existing capacity C[i,z] from input data (for totals)

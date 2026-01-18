@@ -36,8 +36,8 @@ function solve_consumer_agent!(mod::Model, m::String, zones::Vector{String})
 
     neg_utility = mod.ext[:expressions][:utility] = @expression(mod,                                                                                           
     sum(W[jh] * ((λ_EOM[jh] - WTP)*g_positive[jh] + (WTP/(2*ela*D[jh]))*(g_ela[jh])^2) for jh in JH)
-    + σ_CM * sum(λ_CM[jz] * cap_cm[jz] * PM[m][zones[jz]] for jz in JZ)
-    + σ_CM * sum((λ_CM[jz]) * cap_cm[jz] for jz in JZ)
+    # + σ_CM * sum(λ_CM[jz] * cap_cm[jz] * PM[m][zones[jz]] for jz in JZ)
+    # + σ_CM * sum((λ_CM[jz]) * cap_cm[jz] for jz in JZ)
     # + σ_CM * sum((λ_CM[jz] - WTP_CM) * cap_cm[jz] for jz in JZ)
     )
 
@@ -45,7 +45,7 @@ function solve_consumer_agent!(mod::Model, m::String, zones::Vector{String})
     mod.ext[:objective] = @objective(mod, Min,
     neg_utility 
     + sum(W[jh] * ρ_EOM/2 * (g[jh] - g_bar[jh])^2 for jh in JH)
-    + σ_CM * sum(ρ_CM[jz]/2 * (cap_cm[jz] - cap_bar[jz])^2 for jz in JZ)
+    # + σ_CM * sum(ρ_CM[jz]/2 * (cap_cm[jz] - cap_bar[jz])^2 for jz in JZ)
     )
     optimize!(mod);
 

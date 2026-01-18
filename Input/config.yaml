@@ -225,14 +225,14 @@ CM:
   A:
     # explicit/implicit/capacity target for zone A
     capacity_target: 16387.31 # "FB-D"  - 16387.31 / "ATC" / "noCBP" - 17629.87 / "implicit" - 11941.33
-    price_target: 72000    # €/MW (price target for zone A - CONE)
+    price_target: 70000    # €/MW (price target for zone A - CONE)
     capacity_margin: 0.1     # 10% capacity margin
     min_price: -10000000
     max_price: 10000000
     D: "A" #
   B:
     capacity_target: 13593.37 # "FB-D" - 13593.37 / "ATC" / "noCBP" - 15468.46 / "implicit" - 14094.73
-    price_target: 71000
+    price_target: 70000
     capacity_margin: 0.1
     min_price: -10000000
     max_price: 10000000
@@ -274,7 +274,7 @@ Network:
   lines: "lines"  # lines dataframe
   ptdf: "ATC"  # PTDF dataframe
   nodal_ptdf: "nodal_ptdf"  # nodal PTDF dataframe
-  coupling: "FB"  # "FB" / "ATC" / "noCBP" / "implicit" / "none"
+  coupling: "ATC"  # "FB" / "ATC" / "noCBP" / "implicit" / "none"
   # IC_reserve: 500000 # €/MW-year higher than the highest fixed cost
   # MC_reserve: 50000 # €/MWh higher than voll
 

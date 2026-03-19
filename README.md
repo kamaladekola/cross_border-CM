@@ -11,7 +11,7 @@ European Member States are increasingly introducing national capacity mechanisms
 The model is a Mixed Complementarity Problem (MCP) solved via the Alternating Direction Method of Multipliers (ADMM). It includes:
 Generation Agents: Investment and dispatch optimization.
 Consumer Agents: Elastic and inelastic demand response.
-Energy & Capacity Market Operators: Flow-based clearing and cross-border obligation management.
+Energy & Capacity Market Operators: Flow-based market coupling applied to both energy and capacity markets
 
 
 ## Requirements

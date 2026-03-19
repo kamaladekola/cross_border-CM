@@ -18,7 +18,7 @@ Energy & Capacity Market Operators: Flow-based clearing and cross-border obligat
 Julia - https://julialang.org/
 Gurobi (with valid licence) - https://www.gurobi.com/
 
-Reference
+## Reference
 If you use this code in your research, please cite:
 Adekola, K., de Vries, L., & Bruninx, K. (2026). Coupling Europe's Capacity Markets. arXiv:2603.08248.
 

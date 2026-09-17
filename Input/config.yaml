@@ -8,7 +8,7 @@ General:
 ADMM:
   rho_EOM: 1.2 # rho ADMM penalty term, EOM
   rho_CM: 1 # rho ADMM penalty term, CM
-  max_iter: 5000
+  max_iter: 10000
   epsilon: 0.1 # 0.1 # stopping criterion - tolerance on "accuracy" with which the coupling constraints are satisfied. Applied to dual and primal residuals.
   CircularBufferSize: 5 # number of iterations for which data will be retained, should be at least 2 and less than max_iter
 
@@ -18,27 +18,27 @@ EOM:
 
 Consumers: # consumers by zones
   A:
-    WTP: 20000 # Max clearing price (€/MWh)
+    WTP: 4000 # Max clearing price (€/MWh)
     D: "A" # Demand timeseries that needs to be picked up
-    ela: 0.2 # fraction of demand that is elastic # 0.04 at WTP = 4000, 0.2 at WTP = 20000
-    sigmaCM: 0 
+    ela: 0.04 # fraction of demand that is elastic # 0.04 at WTP = 4000, 0.2 at WTP = 20000
+    sigmaCM: 1 
     NodeShare:
       n1: 0.5
       n2: 0.5
 
   B:
-    WTP: 20000 #4000.0 # Max clearing price (€/MWh)
+    WTP: 4000 #4000.0 # Max clearing price (€/MWh)
     D: "B" # Timeseries that needs to be picked up
-    ela: 0.2 # fraction of demand that is elastic
-    sigmaCM: 0
+    ela: 0.04 # fraction of demand that is elastic
+    sigmaCM: 1
     NodeShare:
         n3: 1.0
 
   C:
-    WTP: 20000 #4000.0 # Max clearing price (€/MWh)
+    WTP: 4000 #4000.0 # Max clearing price (€/MWh)
     D: "C" # Timeseries that needs to be picked up
-    ela: 0.2 # fraction of demand that is elastic
-    sigmaCM: 0
+    ela: 0.04 # fraction of demand that is elastic
+    sigmaCM: 1
     NodeShare:
         n4: 1.0
 
@@ -224,23 +224,23 @@ Generators:
 CM:
   A:
     # explicit/implicit/capacity target for zone A
-    capacity_target: 17629.87 # "FB-D"/ "ATC"  - 16748.4 / "noCBP" - 17629.87 / "implicit" - 17629.87
+    capacity_target: 16156 # "FB-D"/ "ATC"  - 16156 / "noCBP" - 16870 / "implicit" - 14778
     price_target: 60000    # €/MW (price target for zone A - CONE)
-    capacity_margin: 0.1     # 10% capacity margin
+    capacity_margin: 0.001     # 0.1% capacity margin
     min_price: -10000000
     max_price: 10000000
     D: "A" #
   B:
-    capacity_target: 15468.46  # "FB-D"/ "ATC" - 14695 / "noCBP" - 15468.46 / "implicit" - 14379.77
+    capacity_target: 13084 # "FB-D"/ "ATC" - 13957 / "noCBP" - 14829 / "implicit" - 13084
     price_target: 70000
-    capacity_margin: 0.1
+    capacity_margin: 0.001
     min_price: -10000000
     max_price: 10000000
     D: "B"
   C:
-    capacity_target: 17169.93 # "FB-D"/ "ATC" - 16311.4 / "noCBP" - 17169.93 / "implicit" - 12142.21 
+    capacity_target: 14238 # "FB-D"/ "ATC" - 15493 / "noCBP" - 16450 / "implicit" - 14238
     price_target: 80000
-    capacity_margin: 0.1
+    capacity_margin: 0.001
     min_price: -10000000
     max_price: 10000000
     D: "C"
@@ -258,15 +258,22 @@ Network:
 
   ATC:
     A:
-      C: [2357.4, -2232.4]  # [forward limit, backward limit]
+      C: [574.3, -454]  # [forward limit, backward limit]
     C:
-      B: [877.1, -716]
+      B: [694, -694]
     B: 
-      A: [1472, -1085.7]
+      A: [740.3, -620]
+
+    # A:
+    #   C: [2089.9, -1969.4]  # [forward limit, backward limit]
+    # C:
+    #   B: [282.1, -161.6]
+    # B: 
+    #   A: [2181.6, -2061.1]
 
 # ATC: [(3000.0000000000036, -3000.0), (655.7499999999674, -655.75), (1282.9500000000007, -344.2500000000018)]
 
-  reserve_cost: 1000000 # €/MW-year
+  reserve_cost: 10000000 # €/MW-year
     
 
   nLines: 4
@@ -274,7 +281,7 @@ Network:
   lines: "lines"  # lines dataframe
   ptdf: "ATC"  # PTDF dataframe
   nodal_ptdf: "nodal_ptdf"  # nodal PTDF dataframe
-  coupling: "none"  # "FB" / "ATC" / "noCBP" / "implicit" / "none"
+  coupling: "implicit"  # "FB" / "ATC" / "noCBP" / "implicit" / "none"
   # IC_reserve: 500000 # €/MW-year higher than the highest fixed cost
   # MC_reserve: 50000 # €/MWh higher than voll
 

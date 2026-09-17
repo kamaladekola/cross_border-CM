@@ -38,7 +38,7 @@ function solve_capacityIC_agent!(mod::Model)
     mod.ext[:objective] = @objective(mod, Min,
         - sum(λ_CM[jz] * cap_cm[jz] for jz in JZ) 
         + sum(ρ_CM[jz]/2 * (cap_cm[jz] - cap_bar[jz])^2 for jz in JZ)
-        + sum(rc * s_cm[jn] for jn in JN)
+        + sum(rc * s_cm[js, jn] for js in JS, jn in JN)
         )
 
     # mod.ext[:objective] = @objective(mod, Min,0.0)
@@ -47,7 +47,7 @@ function solve_capacityIC_agent!(mod::Model)
         delete(mod, mod.ext[:constraints][:cap_limit][js,jn])
     end
     mod.ext[:constraints][:cap_limit] =
-        @constraint(mod, [js in JS, jn in JN], g_scar[js, jn] <= CapCM_nodal[jn] + s_cm[jn])
+        @constraint(mod, [js in JS, jn in JN], g_scar[js, jn] <= CapCM_nodal[jn])
 
     for jz in JZ
         delete(mod, mod.ext[:constraints][:capacity_allocation][jz])

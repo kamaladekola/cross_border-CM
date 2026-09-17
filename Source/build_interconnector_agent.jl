@@ -47,10 +47,13 @@ function build_interconnector_agent!(mod::Model)
         r[jh, jn] == g_bar[jh, jn] - D_nodal[jh,jn])
 
     # nodal capacity limit
-    mod.ext[:constraints][:cap_limit] = @constraint(mod, [jh in JH, jn in JN], (g_bar[jh, jn] - Y_nodal[jh, jn]) <= y_bar[jn] + s[jn]) # to be checked
+    mod.ext[:constraints][:cap_limit] = @constraint(mod, [jh in JH, jn in JN], (g_bar[jh, jn] - Y_nodal[jh, jn]) <= y_bar[jn] + s[jn])
 
-    # zonal capacity allocation to nodes
+    # zonal capacity allocation to nodes (free siting)
     mod.ext[:constraints][:capacity_allocation] = @constraint(mod, [jz in JZ], Y_zonal[jz] == sum(y_bar[jn] for jn in JN if zone_of_idx[jn] == jz))
+
+    # fixed siting sensitivity analysis
+    # mod.ext[:constraints][:ybar_alloc] = @constraint(mod, [jn in JN], y_bar[jn] == M[zone_of_idx[jn], jn] * Y_zonal[zone_of_idx[jn]])
 
     # Aggregate nodal flows to zonal net positions
     mod.ext[:constraints][:net_pos] = @constraint(mod, [jh in JH, jz in JZ],

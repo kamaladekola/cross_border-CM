@@ -27,13 +27,13 @@ function build_capacityIC_agent!(mod::Model)
     ρ_CM = mod.ext[:parameters][:ρ_CM]
     
     y_bar_nodal = mod.ext[:parameters][:y_bar_nodal]
-
+    called = mod.ext[:parameters][:called]
     
     # Variables
     cap_cm = mod.ext[:variables][:cap_cm] = @variable(mod, [jz=JZ], base_name = "netposition")                     # net position: positive => import
     r_cm = mod.ext[:variables][:r_cm] = @variable(mod, [js=JS, jn=JN], base_name = "nodal_injection")          # nodal injections
     flow_cm  = mod.ext[:variables][:flow_cm] = @variable(mod, [js=JS, jl=JL], base_name = "flow")           # line flows
-    s_cm = mod.ext[:variables][:s_cm] = @variable(mod, [jn in JN], lower_bound = 0, base_name = "network_reserve")    # reserve provision to ensure feasibility
+    s_cm = mod.ext[:variables][:s_cm] = @variable(mod, [js=JS, jn=JN], lower_bound = 0, base_name = "network_reserve")    # reserve provision to ensure feasibility
     CapCM_nodal = mod.ext[:variables][:CapCM_nodal] = @variable(mod, [jn=JN], lower_bound=0, base_name="nodal_capacity")    # nodal capacity allocation
     g_scar = mod.ext[:variables][:g_scar] = @variable(mod, [js=JS, jn=JN], lower_bound=0, base_name="nodal_generation")          # nodal generation
 
@@ -49,7 +49,7 @@ function build_capacityIC_agent!(mod::Model)
     mod.ext[:objective] = @objective(mod, Min,
         - sum(λ_CM[jz] * cap_cm[jz] for jz in JZ) 
         + sum(ρ_CM[jz]/2 * (cap_cm[jz] - cap_bar[jz])^2 for jz in JZ)
-        + sum(rc * s_cm[jn] for jn in JN)
+        + sum(rc * s_cm[js, jn] for js in JS, jn in JN)
         )
 
     
@@ -58,7 +58,7 @@ function build_capacityIC_agent!(mod::Model)
     # -------------------
     # g_scar ≤ CapCM_nodal + s_res
     mod.ext[:constraints][:cap_limit] =
-        @constraint(mod, [js in JS, jn in JN], g_scar[js, jn] <= CapCM_nodal[jn] + s_cm[jn])
+        @constraint(mod, [js in JS, jn in JN], g_scar[js, jn] <= CapCM_nodal[jn])
 
     # CapCM_nodal <= y_bar_nodal
     mod.ext[:constraints][:capcm_limit] = @constraint(mod, [jn in JN], CapCM_nodal[jn] <= y_bar_nodal[jn])
@@ -71,14 +71,29 @@ function build_capacityIC_agent!(mod::Model)
 
         # nodal balance constraint: for all scenarios, nodal injection = generation - demand
         mod.ext[:constraints][:nodal_balance] = @constraint(mod, [js in JS, jn in JN], 
-            r_cm[js, jn] == g_scar[js, jn] - demand[js,jn])
+            r_cm[js, jn] == g_scar[js, jn] - (demand[js,jn] - s_cm[js, jn]))
 
         # Zonal net positions from nodal injections (import-positive)
         #    cap_cm[z] >= - Σ_{n∈z} r_cm[js,n]  for ALL scenarios js  (robust deliverability)
-        mod.ext[:constraints][:netpos] =
-            @constraint(mod, [js in JS, jz in JZ],
-                cap_cm[jz] >= - sum(r_cm[js, jn] for jn in JN if zone_of_idx[jn] == jz)
-            )
+
+        # mod.ext[:constraints][:netpos] =
+        #     @constraint(mod, [js in JS, jz in JZ],
+        #         cap_cm[jz] >= - sum(r_cm[js, jn] for jn in JN if zone_of_idx[jn] == jz)
+        #     )
+
+        np_s = mod.ext[:expressions][:np_s] = @expression(mod, [js in JS, jz in JZ], -sum(r_cm[js, jn] for jn in JN if zone_of_idx[jn] == jz))
+
+        sys_called = Dict(js => any(called[js, jz] for jz in JZ) for js in JS)
+
+        mod.ext[:constraints][:netpos_imp] = @constraint(mod, [js in JS, jz in JZ; called[js, jz]],
+            np_s[js, jz] >= cap_cm[jz])
+
+        mod.ext[:constraints][:netpos_exp] = @constraint(mod, [js in JS, jz in JZ; sys_called[js] && !called[js, jz]],
+            np_s[js, jz] <= cap_cm[jz])
+
+        # deliverability floor + demand shortfall for called zones
+        mod.ext[:constraints][:netpos] = @constraint(mod, [js in JS, jz in JZ; called[js, jz]],
+            np_s[js, jz] >= cap_cm[jz] + sum(demand[js, jn] - Cap_Demand_nodal[jn] for jn in JN if zone_of_idx[jn] == jz))
 
         # System balance (sum injections = 0) for all scenarios
         mod.ext[:constraints][:sys_bal] =
@@ -97,32 +112,40 @@ function build_capacityIC_agent!(mod::Model)
             @constraint(mod, [js in JS, jl in JL], -Fmax[jl] <= flow_cm[js, jl] <= Fmax[jl])
 
     elseif coupling == "ATC"
-        
         TCONNECT = mod.ext[:parameters][:TCONNECT]
         ATC = mod.ext[:parameters][:ATC]
-        ex_cm = mod.ext[:variables][:ex_cm] = @variable(mod, [t in TCONNECT], base_name="ex_cm")
-        
 
-        # mod.ext[:constraints][:cap_limit] = @constraint(mod, [js in JS, jz in JZ], sum(g_scar[js, jn]  for jn in JN if zone_of_idx[jn] == jz) <= CapCM_zonal[jz] + sum(s_cm[jn] for jn in JN if zone_of_idx[jn] == jz))
+        ex_cm = mod.ext[:variables][:ex_cm] = @variable(mod, [js in JS, t in TCONNECT], base_name = "ex_cm")
+
+        # scenario net position, import-positive; Σ_z np_s[js,:] == 0 identically (= sys_bal)
+        np_s = mod.ext[:expressions][:np_s] = @expression(mod, [js in JS, jz in JZ],
+            sum(ex_cm[js, t] for t in TCONNECT if t[2] == zone_syms[jz]) -
+            sum(ex_cm[js, t] for t in TCONNECT if t[1] == zone_syms[jz]))
+
+        # zonal balance = FB nodal_balance summed over the zone
+        mod.ext[:constraints][:zonal_balance] = @constraint(mod, [js in JS, jz in JZ],
+            np_s[js, jz] == sum(demand[js, jn] - s_cm[js, jn] - g_scar[js, jn] for jn in JN if zone_of_idx[jn] == jz))
 
         mod.ext[:constraints][:global_bal] = @constraint(mod, sum(cap_cm[jz] for jz in JZ) == 0)
 
-        mod.ext[:constraints][:zonal_balance] = @constraint(mod, [js in JS, jz in JZ], cap_cm[jz] >= -(sum(g_scar[js, jn] for jn in JN if zone_of_idx[jn] == jz) - 
-            sum(demand[js,jn] for jn in JN if zone_of_idx[jn] == jz)))
+        sys_called = Dict(js => any(called[js, jz] for jz in JZ) for js in JS)
 
-        # exchanges
-        mod.ext[:constraints][:cap_cm_netposition] = @constraint(mod, [js in JS, jz in JZ],
-            cap_cm[jz] == 
-            sum(ex_cm[t] for t in TCONNECT if t[2] == zone_syms[jz]) -
-            sum(ex_cm[t] for t in TCONNECT if t[1] == zone_syms[jz])
-        )
+        # called zones: deliverability floor
+        mod.ext[:constraints][:netpos_imp] = @constraint(mod, [js in JS, jz in JZ; called[js, jz]],
+            np_s[js, jz] >= cap_cm[jz])
 
-        
-        # ATC limits on exchanges
-        mod.ext[:constraints][:cap_cm_atc_limit] = @constraint(mod, [t in TCONNECT], 
-            ATC[t][2] <= ex_cm[t] <= ATC[t][1]
-        )
-    else
+        # uncalled zones in a scenario with a call: honour the obligation
+        mod.ext[:constraints][:netpos_exp] = @constraint(mod, [js in JS, jz in JZ; sys_called[js] && !called[js, jz]],
+            np_s[js, jz] <= cap_cm[jz])
+
+        # called zones: deliverability floor + demand shortfall
+        mod.ext[:constraints][:netpos_imp] = @constraint(mod, [js in JS, jz in JZ; called[js, jz]],
+            np_s[js, jz] >= cap_cm[jz] + sum(demand[js, jn] - Cap_Demand_nodal[jn] for jn in JN if zone_of_idx[jn] == jz))
+
+        # ATC limits per scenario
+        mod.ext[:constraints][:cap_cm_atc_limit] = @constraint(mod, [js in JS, t in TCONNECT],
+            ATC[t][2] <= ex_cm[js, t] <= ATC[t][1])
+        else
         # constrain cap_cm to zero
         @constraint(mod, [jz in JZ], cap_cm[jz] == 0)
     end

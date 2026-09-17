@@ -24,7 +24,8 @@ function define_capacityIC_parameters!(mod::Model, data::Dict, zones::Vector{Str
     
     scarcity_matrix = Matrix{Float64}(scarcity[:, zones])
     mod.ext[:parameters][:scarcity_matrix] = scarcity_matrix
-    
+    mod.ext[:parameters][:called] = scarcity_matrix .>= 1.0
+
     # Set capacity market parameters
     mod.ext[:parameters][:CapCM_zonal] = zeros(length(zones))
     mod.ext[:parameters][:y_bar_nodal] = zeros(length(node_syms))

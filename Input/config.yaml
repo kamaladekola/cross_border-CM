@@ -8,7 +8,7 @@ General:
 ADMM:
   rho_EOM: 1.2 # rho ADMM penalty term, EOM
   rho_CM: 1 # rho ADMM penalty term, CM
-  max_iter: 5000
+  max_iter: 10000
   epsilon: 0.1 # 0.1 # stopping criterion - tolerance on "accuracy" with which the coupling constraints are satisfied. Applied to dual and primal residuals.
   CircularBufferSize: 5 # number of iterations for which data will be retained, should be at least 2 and less than max_iter
 
@@ -23,11 +23,11 @@ Consumers: # consumers by zones
     ela: 0.04 # fraction of demand that is elastic # 0.04 at WTP = 4000, 0.2 at WTP = 20000
     sigmaCM: 1 
     NodeShare:
-      n1: 0.7
-      n2: 0.3
+      n1: 0.5
+      n2: 0.5
 
   B:
-    WTP: 4000 #20000.0 # Max clearing price (€/MWh)
+    WTP: 4000 #4000.0 # Max clearing price (€/MWh)
     D: "B" # Timeseries that needs to be picked up
     ela: 0.04 # fraction of demand that is elastic
     sigmaCM: 1
@@ -35,7 +35,7 @@ Consumers: # consumers by zones
         n3: 1.0
 
   C:
-    WTP: 4000 #20000.0 # Max clearing price (€/MWh)
+    WTP: 4000 #4000.0 # Max clearing price (€/MWh)
     D: "C" # Timeseries that needs to be picked up
     ela: 0.04 # fraction of demand that is elastic
     sigmaCM: 1
@@ -54,8 +54,8 @@ Generators:
       sigmaCM: 1
       DF: 1.0 # derating factor
       NodeShare:
-          n1: 0.7
-          n2: 0.3
+          n1: 0.5
+          n2: 0.5
 
     MidMerit:
       a: 0.032 # (€/MWh)^2
@@ -66,20 +66,20 @@ Generators:
       sigmaCM: 1
       DF: 1.0 # derating factor
       NodeShare:
-          n1: 0.7
-          n2: 0.3
+          n1: 0.5
+          n2: 0.5
 
     Peak:
-      a: 0.08 # (€/MWh)^2
-      b: 90 # €/MWh
+      a: 0.04 # (€/MWh)^2
+      b: 100 # €/MWh
       C: 0 # MW - existing capacity (set to zero if greenfield)
-      I: 70000 # €/MW-year - annualized investment cost
+      I: 60000 # €/MW-year - annualized investment cost
       max_cap: 100000 # MW - maximum capacity
       sigmaCM: 1
       DF: 1.0 # derating factor
       NodeShare:
-          n1: 0.7
-          n2: 0.3
+          n1: 0.5
+          n2: 0.5
 
     WindOnshore:
       a: 0 # (€/MWh)^2
@@ -91,8 +91,8 @@ Generators:
       sigmaCM: 0
       DF: 0 # derating factor
       NodeShare:
-          n1: 0.7
-          n2: 0.3
+          n1: 0.5
+          n2: 0.5
     PV:
       a: 0 # (€/MWh)^2
       b: 0 # €/MWh
@@ -103,8 +103,8 @@ Generators:
       sigmaCM: 0
       DF: 0 # derating factor
       NodeShare:
-          n1: 0.7
-          n2: 0.3
+          n1: 0.5
+          n2: 0.5
   B:
     Baseload:
       a: 0.008 # (€/MWh)^2
@@ -129,8 +129,8 @@ Generators:
           n3: 1.0
 
     Peak:
-      a: 0.08 # (€/MWh)^2
-      b: 90 # €/MWh
+      a: 0.06 # (€/MWh)^2
+      b: 100 # €/MWh
       C: 0 # MW - existing capacity (set to zero if greenfield)
       I: 70000 # €/MW-year - annualized investment cost
       max_cap: 100000 # MW - maximum capacity
@@ -188,9 +188,9 @@ Generators:
 
     Peak:
       a: 0.08 # (€/MWh)^2
-      b: 90 # €/MWh
+      b: 100 # €/MWh
       C: 0 # MW - existing capacity (set to zero if greenfield)
-      I: 70000 # €/MW-year - annualized investment cost
+      I: 80000 # €/MW-year - annualized investment cost
       max_cap: 100000 # MW - maximum capacity
       sigmaCM: 1
       DF: 1.0 # derating factor
@@ -224,23 +224,23 @@ Generators:
 CM:
   A:
     # explicit/implicit/capacity target for zone A
-    capacity_target: 16387.31 # "FB-D"  - 16387.31 / "ATC" / "noCBP" - 17629.87 / "implicit" - 11941.33
-    price_target: 70000    # €/MW (price target for zone A - CONE)
-    capacity_margin: 0.1     # 10% capacity margin
+    capacity_target: 16156 # "FB-D"/ "ATC"  - 16156 / "noCBP" - 16870 / "implicit" - 14778
+    price_target: 60000    # €/MW (price target for zone A - CONE)
+    capacity_margin: 0.001     # 0.1% capacity margin
     min_price: -10000000
     max_price: 10000000
     D: "A" #
   B:
-    capacity_target: 13593.37 # "FB-D" - 13593.37 / "ATC" / "noCBP" - 15468.46 / "implicit" - 14094.73
+    capacity_target: 13084 # "FB-D"/ "ATC" - 13957 / "noCBP" - 14829 / "implicit" - 13084
     price_target: 70000
-    capacity_margin: 0.1
+    capacity_margin: 0.001
     min_price: -10000000
     max_price: 10000000
     D: "B"
   C:
-    capacity_target: 17774.16 # "FB-D" - 17774.16 / "ATC" / "noCBP" - 17169.92 / "implicit" - 14105.35
-    price_target: 70000
-    capacity_margin: 0.1
+    capacity_target: 14238 # "FB-D"/ "ATC" - 15493 / "noCBP" - 16450 / "implicit" - 14238
+    price_target: 80000
+    capacity_margin: 0.001
     min_price: -10000000
     max_price: 10000000
     D: "C"
@@ -258,11 +258,18 @@ Network:
 
   ATC:
     A:
-      C: [216.4, -91.3]  # [forward limit, backward limit]
+      C: [574.3, -454]  # [forward limit, backward limit]
     C:
-      B: [692.8, -471]
+      B: [694, -694]
     B: 
-      A: [1.6, -1.3]
+      A: [740.3, -620]
+
+    # A:
+    #   C: [2089.9, -1969.4]  # [forward limit, backward limit]
+    # C:
+    #   B: [282.1, -161.6]
+    # B: 
+    #   A: [2181.6, -2061.1]
 
 # ATC: [(3000.0000000000036, -3000.0), (655.7499999999674, -655.75), (1282.9500000000007, -344.2500000000018)]
 
@@ -274,7 +281,7 @@ Network:
   lines: "lines"  # lines dataframe
   ptdf: "ATC"  # PTDF dataframe
   nodal_ptdf: "nodal_ptdf"  # nodal PTDF dataframe
-  coupling: "ATC"  # "FB" / "ATC" / "noCBP" / "implicit" / "none"
+  coupling: "implicit"  # "FB" / "ATC" / "noCBP" / "implicit" / "none"
   # IC_reserve: 500000 # €/MW-year higher than the highest fixed cost
   # MC_reserve: 50000 # €/MWh higher than voll
 
